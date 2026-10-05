@@ -214,7 +214,7 @@ test('fin de partie : Ombres encaissées (Dîme et attribut Charon compris), sta
   p.talents = { purse: 1, tithe: 2 }; // +20 %
   assert.equal(recordRun(p, { shadows: 100, floorIndex: 8, status: 'victory' }), 130);
   assert.equal(p.shadows, 170);
-  assert.deepEqual(p.stats, { runs: 2, victories: 1, bestFloor: 9, totalShadows: 170 });
+  assert.deepEqual(p.stats, { runs: 2, victories: 1, bestFloor: 9, totalShadows: 170, bosses: { cerberus: 0, hydra: 0, thanatos: 0 } });
 });
 
 test('profil abîmé ou trafiqué : relu sans planter', () => {
@@ -593,7 +593,9 @@ test("code d'export : aller-retour exact, espaces et retours à la ligne tolér�
   p.shadows = 1234;
   p.attrs = { ares: 4, demeter: 7, hermes: 1, charon: 10 };
   p.talents = cleanMeta({ attrs: p.attrs, talents: { swift: 1, blade: 1, vigor: 2, roots: 1, purse: 3, tithe: 2 } }).talents;
-  p.stats = { runs: 17, victories: 2, bestFloor: 9, totalShadows: 4321 };
+  p.stats = { runs: 17, victories: 2, bestFloor: 9, totalShadows: 4321, bosses: { cerberus: 3, hydra: 2, thanatos: 2 } };
+  p.cls = 'huntress';
+  p.builds = { warrior: { vigor: 1 } };
   const code = encodeProfile(p);
   assert.match(code, /^BORROG1-[A-Za-z0-9._]+-[a-z0-9]+$/);
   assert.deepEqual(decodeProfile(code).profile, p);

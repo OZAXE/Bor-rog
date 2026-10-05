@@ -5,6 +5,7 @@
 
 import { SIM } from './simConfig.js';
 import { metaValue, rankOf, attrValue } from '../meta/tree.js';
+import { classRules } from './classes.js';
 
 export const BOONS = {
   ares: {
@@ -62,16 +63,32 @@ export function playerStats(p) {
   const m = (id) => metaValue(p.meta, id);
   const a = (id) => attrValue(p.meta, id);
   const base = SIM.player;
+  const cls = classRules(p.cls);
+  const atk = cls.attack; // réglages du coup de la classe
+  const range = 1 + 0.2 * n('artemis') + m('reach'); // Allonge d'Artémis, Allonge
+  const shot = cls.shot || null;
   // Sursaut : dégâts accrus quand la vie est basse
   const low = p.hp <= p.maxHp * 0.3 ? m('surge') : 0;
   // Rage d'Arès : cadence accrue juste après avoir vaincu un ennemi
   const rage = p.rage > 0 ? m('rage') : 0;
   return {
-    damage: (base.attack.damage + n('ares')) * (1 + m('blade') + low),
-    speed: base.speed * (1 + 0.12 * n('hermes') + m('fleet') + a('hermes')),
-    attackRange: base.attack.range * (1 + 0.2 * n('artemis') + m('reach')),
-    attackArc: base.attack.arc * (1 + m('cleave')),
-    attackCooldown: base.attack.cooldown * 0.85 ** n('zeus') * (1 - m('swift')) * (1 - a('ares')) * (1 - rage),
+    weapon: cls.weapon, // 'sword', 'bow' ou 'orb'
+    damage: (atk.damage + n('ares')) * (1 + m('blade') + low),
+    speed: base.speed * cls.speed * (1 + 0.12 * n('hermes') + m('fleet') + a('hermes')),
+    attackRange: atk.range * range,
+    attackArc: atk.arc * (1 + m('cleave')),
+    attackCooldown: atk.cooldown * 0.85 ** n('zeus') * (1 - m('swift')) * (1 - a('ares')) * (1 - rage),
+    knockback: atk.knockback,
+    attackDuration: atk.duration,
+    moveFactor: atk.moveFactor,
+    autoAimRange: atk.autoAimRange * range,
+    // Tirs (Chasseresse, Mystique) : portée, ennemis traversés, rayon d'explosion.
+    // Fendoir élargit l'arc du Guerrier, rend les flèches perforantes, agrandit l'explosion.
+    shotSpeed: shot ? shot.speed : 0,
+    shotRange: shot ? shot.range * range : 0,
+    shotRadius: shot ? shot.radius : 0,
+    pierce: cls.weapon === 'bow' ? (shot.pierce || 0) + rankOf(p.meta, 'cleave') : 0,
+    blast: shot && shot.blast ? shot.blast * (1 + m('cleave')) : 0,
     critChance: m('crit'), // chance de dégâts doublés
     executeBelow: m('execute'), // dégâts doublés sous cette part de PV (0 = inactif)
     momentum: m('momentum'), // dégâts en plus sur le premier coup après une esquive

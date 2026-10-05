@@ -468,8 +468,9 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
 }
 
 // Flèches : un seul InstancedMesh pour toutes (1 appel de dessin)
-export function createProjectileView(scene) {
+export function createProjectileView(scene, haloTexture) {
   const max = 64;
+  // Flèches et venin : bâtonnets colorés par instance
   const mesh = new THREE.InstancedMesh(
     new THREE.BoxGeometry(0.06, 0.06, 0.55),
     new THREE.MeshBasicMaterial({ color: 0xffffff }),
@@ -479,9 +480,29 @@ export function createProjectileView(scene) {
   mesh.frustumCulled = false;
   for (let i = 0; i < max; i++) mesh.setColorAt(i, new THREE.Color(0xffffff));
   scene.add(mesh);
+  // Orbes de la Mystique : cœur clair + halo additif
+  const orbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ color: 0xd9ccff }), max);
+  const glows = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(1.1, 1.1),
+    new THREE.MeshBasicMaterial({
+      map: haloTexture,
+      color: 0x8a5cff,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+    max,
+  );
+  for (const o of [orbs, glows]) {
+    o.count = 0;
+    o.frustumCulled = false;
+    scene.add(o);
+  }
   const arrowColor = new THREE.Color(0xffd27a);
   const venomColor = new THREE.Color(0xff7a2f);
   const reflectedColor = new THREE.Color(0x9fe8ff); // renvoyé par le Bouclier du vent
+  const heroColor = new THREE.Color(0xeafff2); // flèche de la Chasseresse
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const p = new THREE.Vector3();
@@ -489,16 +510,32 @@ export function createProjectileView(scene) {
   const up = new THREE.Vector3(0, 1, 0);
   return {
     // lag : fraction du pas pas encore écoulée (interpolation vers l'arrière)
-    update(projectiles, lag, step) {
-      mesh.count = Math.min(projectiles.length, max);
-      for (let i = 0; i < mesh.count; i++) {
-        const a = projectiles[i];
-        q.setFromAxisAngle(up, Math.atan2(a.vx, a.vz));
+    // camQuat : orientation de la caméra (les halos lui font face)
+    update(projectiles, lag, step, camQuat, time = 0) {
+      let n = 0;
+      let o = 0;
+      for (const a of projectiles) {
         p.set(a.x - a.vx * step * lag, 0.75, a.z - a.vz * step * lag);
-        mesh.setMatrixAt(i, m.compose(p, q, s));
-        mesh.setColorAt(i, a.reflected ? reflectedColor : a.kind === 'venom' ? venomColor : arrowColor);
+        if (a.kind === 'orb') {
+          if (o >= max) continue;
+          const k = 1 + Math.sin(time * 18 + a.id) * 0.12;
+          orbs.setMatrixAt(o, m.compose(p, q.identity(), s.set(k, k, k)));
+          glows.setMatrixAt(o, m.compose(p, camQuat || q, s.set(k, k, 1)));
+          o++;
+          continue;
+        }
+        if (n >= max) continue;
+        q.setFromAxisAngle(up, Math.atan2(a.vx, a.vz));
+        mesh.setMatrixAt(n, m.compose(p, q, s.set(1, 1, 1)));
+        const c = a.reflected ? reflectedColor : a.friendly ? heroColor : a.kind === 'venom' ? venomColor : arrowColor;
+        mesh.setColorAt(n, c);
+        n++;
       }
-      mesh.instanceMatrix.needsUpdate = true;
+      s.set(1, 1, 1);
+      mesh.count = n;
+      orbs.count = o;
+      glows.count = o;
+      for (const x of [mesh, orbs, glows]) x.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     },
   };

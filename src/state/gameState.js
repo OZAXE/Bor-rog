@@ -10,16 +10,19 @@ import { SIM, ticks } from '../systems/simConfig.js';
 import { enemyStats } from '../systems/difficulty.js';
 import { cleanMeta, metaValue, rankOf, attrValue } from '../meta/tree.js';
 import { startPact } from '../systems/descent.js';
+import { classOf, classRules } from '../systems/classes.js';
 
-export const STATE_VERSION = 7;
+export const STATE_VERSION = 8;
 
 // options.enemies : false pour un donjon vide (tests d'exploration)
 // options.dungeonParams : réglages du générateur d'étages (tests)
 // options.meta : améliorations permanentes { attrs, talents } (cf. src/meta/tree.js)
+// options.cls : classe du héros ('warrior', 'huntress', 'mystic' ; Guerrier par défaut)
 export function createGameState(seed, options = {}) {
   // Améliorations permanentes apportées par le joueur (même graine + mêmes rangs = même partie)
   const meta = cleanMeta(options.meta);
-  const maxHp = SIM.player.maxHp + metaValue(meta, 'vigor') + Math.floor(attrValue(meta, 'demeter'));
+  const cls = classOf(options.cls);
+  const maxHp = classRules(cls).maxHp + metaValue(meta, 'vigor') + Math.floor(attrValue(meta, 'demeter'));
   const state = {
     version: STATE_VERSION,
     seed: String(seed),
@@ -30,6 +33,7 @@ export function createGameState(seed, options = {}) {
     kills: 0,
     gold: metaValue(meta, 'purse'), // oboles (perdues à la fin de la partie)
     shadows: 0, // Ombres gagnées pendant la partie (gardées à la fin, cf. src/meta/profile.js)
+    bossesDefeated: [], // boss vaincus pendant la partie (déblocage des classes)
     offer: null, // écran de Charon : { boons: [ids], rerolls } ou null
     // Générateur de la partie (combats, butin…).
     // La génération des étages a ses propres générateurs dérivés de la graine.
@@ -44,6 +48,7 @@ export function createGameState(seed, options = {}) {
       facing: 0, // orientation (radians, 0 = vers le sud, z croissant)
       hp: maxHp,
       maxHp,
+      cls, // classe du héros (arme, PV)
       meta, // attributs et talents permanents (lus par playerStats)
       defiance: rankOf(meta, 'defiance') > 0 ? 1 : 0, // relèvements restants (Défi de la Mort)
       // Compteurs en pas de simulation (0 = inactif)

@@ -107,6 +107,19 @@ export function createEffects(scene, haloTexture) {
           if (ev.crit) burst(ev.x, 0.8, ev.z, 14, 0xf2c96b, 3.5, 0.4);
           shake = Math.max(shake, ev.crit ? 0.14 : 0.06);
           break;
+        case 'heroShot':
+          // Petite gerbe à la sortie de l'arc ou du bâton
+          burst(ev.x + Math.sin(ev.facing) * 0.5, 0.75, ev.z + Math.cos(ev.facing) * 0.5, 4, ev.kind === 'orb' ? 0xb9a0ff : 0xeafff2, 1, 0.2);
+          break;
+        case 'orbBurst':
+          // Explosion d'âme : anneau de particules au rayon de l'explosion + cœur
+          for (let k = 0; k < 14; k++) {
+            const ang = (k / 14) * Math.PI * 2;
+            burst(ev.x + Math.cos(ang) * ev.r, 0.5, ev.z + Math.sin(ang) * ev.r, 2, 0x8a5cff, 0.8, 0.35);
+          }
+          burst(ev.x, 0.7, ev.z, 16, 0xd9ccff, 3, 0.4);
+          shake = Math.max(shake, 0.08);
+          break;
         case 'defiance':
           // Défi de la Mort : le héros se relève dans une explosion d'âme
           burst(ev.x, 0.8, ev.z, 50, 0x2fff86, 5, 1.1);

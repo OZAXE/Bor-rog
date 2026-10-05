@@ -48,7 +48,7 @@ let seed = params.get('seed') || randomSeed();
 // Objet conteneur : l'écran du Seuil et la boucle partagent le même profil
 const profile = { current: loadProfile() };
 // Chaque partie démarre avec les améliorations permanentes achetées au Seuil
-const newState = (s) => createGameState(s, { meta: metaOf(profile.current) });
+const newState = (s) => createGameState(s, { meta: metaOf(profile.current), cls: profile.current.cls });
 
 // ---- État ----
 let state = newState(seed);
@@ -114,7 +114,7 @@ let dungeonView = makeDungeonView();
 let viewFloor = state.floorIndex;
 const playerView = createPlayerView(scene, textures.toon);
 const enemyViews = createEnemyViews(scene, textures.toon, cam.camera.quaternion);
-const projectileView = createProjectileView(scene);
+const projectileView = createProjectileView(scene, textures.halo);
 const effects = createEffects(scene, textures.halo);
 const gateView = createGateView(scene, textures.halo);
 const lootView = createLootView(scene, textures.toon, textures.halo);
@@ -469,6 +469,8 @@ function frame(timestamp) {
   const x = prev.x + (p.x - prev.x) * alpha;
   const z = prev.z + (p.z - prev.z) * alpha;
   const facing = lerpAngle(prev.facing, p.facing, alpha);
+  playerView.setClass(p.cls);
+  setAttackLabel(p.cls);
   playerView.update(x, z, facing, Math.hypot(p.vx, p.vz), time, {
     blink: p.invuln > 0 && p.dashTimer === 0 && state.status === 'playing',
     dashing: p.dashTimer > 0,
@@ -481,7 +483,7 @@ function frame(timestamp) {
     enemyPos.set(e.id, { x: pe.x + (e.x - pe.x) * alpha, z: pe.z + (e.z - pe.z) * alpha });
   }
   enemyViews.update(state.enemies, enemyPos, time);
-  projectileView.update(state.projectiles, 1 - alpha, STEP);
+  projectileView.update(state.projectiles, 1 - alpha, STEP, cam.camera.quaternion, time);
   effects.update(dt);
   gateView.update(state, dt, time);
   lootView.update(state, time, dt);
@@ -517,6 +519,16 @@ showSeed();
 showFloor(false);
 updateHud();
 requestAnimationFrame(frame);
+
+// Bouton d'attaque tactile : son nom suit l'arme de la classe
+const ATTACK_LABELS = { warrior: 'Frapper', huntress: 'Tirer', mystic: 'Lancer' };
+let attackLabel = '';
+function setAttackLabel(cls) {
+  const label = ATTACK_LABELS[cls] || 'Frapper';
+  if (label === attackLabel) return;
+  attackLabel = label;
+  $('btn-attack').textContent = label;
+}
 
 // Interpolation d'angle par le plus court chemin (évite un tour complet entre -π et π)
 function lerpAngle(a, b, t) {

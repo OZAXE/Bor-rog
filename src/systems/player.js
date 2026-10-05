@@ -46,7 +46,7 @@ export function updatePlayer(state, intent, dt) {
     p.vx = p.dashX * cfg.dash.speed;
     p.vz = p.dashZ * cfg.dash.speed;
   } else {
-    const slow = p.attackTimer > 0 ? cfg.attack.moveFactor : 1;
+    const slow = p.attackTimer > 0 ? st.moveFactor : 1;
     const targetVx = moveX * st.speed * slow;
     const targetVz = moveZ * st.speed * slow;
     // Accélération franche, freinage encore plus franc : le héros répond tout de suite
@@ -79,10 +79,12 @@ export function updatePlayer(state, intent, dt) {
       const target = autoAimTarget(state);
       if (target) p.facing = facingOf(target.x - p.x, target.z - p.z);
     }
-    p.attackTimer = ticks(cfg.attack.duration);
+    p.attackTimer = ticks(st.attackDuration);
     p.attackCooldown = ticks(st.attackCooldown);
-    state.events.push({ type: 'swing', x: p.x, z: p.z, facing: p.facing, range: st.attackRange, arc: st.attackArc });
-    resolvePlayerHit(state);
+    if (st.weapon === 'sword') {
+      state.events.push({ type: 'swing', x: p.x, z: p.z, facing: p.facing, range: st.attackRange, arc: st.attackArc });
+      resolvePlayerHit(state);
+    } else shoot(state, st);
   }
 }
 
@@ -101,6 +103,34 @@ function resolvePlayerHit(state) {
     damageEnemy(state, e, st.damage + bonus, dir);
   }
   removeDeadEnemies(state);
+}
+
+// Chasseresse et Mystique : le coup est un projectile allié (flèche ou orbe), qui
+// part devant le héros dans la direction visée. Il est résolu dans projectiles.js.
+function shoot(state, st) {
+  const p = state.player;
+  const d = dirOf(p.facing);
+  // Élan : bonus sur le premier tir après une esquive
+  const bonus = p.afterDash > 0 ? st.momentum : 0;
+  p.afterDash = 0;
+  const start = SIM.player.radius + 0.2;
+  const kind = st.weapon === 'bow' ? 'heroArrow' : 'orb';
+  state.projectiles.push({
+    id: state.nextId++,
+    kind,
+    friendly: true, // touche les ennemis, jamais le héros
+    x: p.x + d.x * start,
+    z: p.z + d.z * start,
+    vx: d.x * st.shotSpeed,
+    vz: d.z * st.shotSpeed,
+    travelLeft: st.shotRange,
+    radius: st.shotRadius,
+    damage: st.damage + bonus,
+    pierce: st.pierce, // ennemis que la flèche peut encore traverser
+    hit: [], // ennemis déjà touchés par ce projectile
+    blast: st.blast, // rayon d'explosion de l'orbe (0 = pas d'explosion)
+  });
+  state.events.push({ type: 'heroShot', kind, x: p.x, z: p.z, facing: p.facing });
 }
 
 // Danse des lames : pendant l'esquive, chaque ennemi traversé est frappé une fois
@@ -148,7 +178,7 @@ export function damageEnemy(state, e, amount, dir) {
   // Recul dans l'axe du coup : éloigne l'ennemi et interrompt sa préparation.
   // Un boss, lui, ne recule pas et ne se laisse pas interrompre.
   if (!e.boss && !e.part) {
-    const kb = SIM.player.attack.knockback;
+    const kb = st.knockback;
     e.kvx = dir.x * kb;
     e.kvz = dir.z * kb;
     if (e.mode === 'windup') {
@@ -179,6 +209,7 @@ export function removeDeadEnemies(state) {
     state.events.push({ type: 'bossDefeated', id: deadBoss.id, bossType: deadBoss.type, x: deadBoss.x, z: deadBoss.z });
     dropBossReward(state, deadBoss);
     state.shadows += sh.bosses[deadBoss.type] || 0;
+    state.bossesDefeated.push(deadBoss.type);
     // Moisson (talent) : chaque boss vaincu rend le héros plus robuste
     const grow = metaValue(p.meta, 'harvest');
     if (grow) {
@@ -224,7 +255,7 @@ export function autoAimTarget(state) {
   for (const e of state.enemies) {
     if (e.untargetable) continue;
     const dist = Math.hypot(e.x - p.x, e.z - p.z);
-    if (dist > SIM.player.attack.autoAimRange * (playerStats(p).attackRange / SIM.player.attack.range)) continue;
+    if (dist > playerStats(p).autoAimRange) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
     // Un ennemi derrière "compte" comme 1,5 m plus loin qu'un ennemi devant
     const behind = angleBetween(p.facing, facingOf(e.x - p.x, e.z - p.z)) / Math.PI;
