@@ -39,6 +39,7 @@
         </div>
         <div id="kills"></div>
         <div id="gold"></div>
+        <div id="shadows"></div>
         <div id="boon-list"></div>
         <div id="lock-info"></div>
         <!-- Vie du boss (en haut de l'écran) -->
@@ -76,8 +77,8 @@
         <p class="hint">Thanatos est tombé. Les Enfers se souviendront de toi.</p>
         <p id="victory-text"></p>
         <div class="buttons">
+          <button id="btn-victory-threshold" type="button">Le Seuil</button>
           <button id="btn-victory-new" type="button">Nouvelle descente</button>
-          <button id="btn-victory-retry" type="button">Rejouer cette graine</button>
         </div>
       </div>
 
@@ -86,8 +87,25 @@
         <h2>Tu es tombé</h2>
         <p id="death-text"></p>
         <div class="buttons">
-          <button id="btn-retry" type="button">Rejouer cette graine</button>
+          <button id="btn-death-threshold" type="button">Le Seuil</button>
           <button id="btn-new" type="button">Nouvelle descente</button>
+          <button id="btn-retry" type="button">Rejouer cette graine</button>
+        </div>
+      </div>
+
+      <!-- Le Seuil : arbre des améliorations permanentes, entre deux parties -->
+      <div id="threshold" class="hidden">
+        <header>
+          <h2>Le Seuil</h2>
+          <p class="shadows"></p>
+          <p class="gained"></p>
+        </header>
+        <div class="tree"></div>
+        <p class="stats"></p>
+        <div class="buttons">
+          <button class="btn-descend" type="button">Descendre</button>
+          <button class="btn-same-seed" type="button">Rejouer la même graine</button>
+          <button class="btn-refund" type="button">Reprendre mes Ombres</button>
         </div>
       </div>
 
@@ -97,6 +115,10 @@
         <p class="subtitle">Descends au fond des Enfers</p>
         <p id="start-text">Chargement…</p>
         <p id="start-seed"></p>
+        <div class="buttons">
+          <button id="btn-open-threshold" type="button">Le Seuil</button>
+          <button id="btn-abandon" type="button" hidden>Abandonner la descente</button>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>

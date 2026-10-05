@@ -481,6 +481,7 @@ export function createProjectileView(scene) {
   scene.add(mesh);
   const arrowColor = new THREE.Color(0xffd27a);
   const venomColor = new THREE.Color(0xff7a2f);
+  const reflectedColor = new THREE.Color(0x9fe8ff); // renvoyé par le Bouclier du vent
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const p = new THREE.Vector3();
@@ -495,7 +496,7 @@ export function createProjectileView(scene) {
         q.setFromAxisAngle(up, Math.atan2(a.vx, a.vz));
         p.set(a.x - a.vx * step * lag, 0.75, a.z - a.vz * step * lag);
         mesh.setMatrixAt(i, m.compose(p, q, s));
-        mesh.setColorAt(i, a.kind === 'venom' ? venomColor : arrowColor);
+        mesh.setColorAt(i, a.reflected ? reflectedColor : a.kind === 'venom' ? venomColor : arrowColor);
       }
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

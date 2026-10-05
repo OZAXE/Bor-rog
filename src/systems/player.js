@@ -5,29 +5,33 @@ import { moveCircle } from './collision.js';
 import { hasLineOfSight, facingOf, dirOf, inArc, angleBetween } from './geometry.js';
 import { playerStats } from './boons.js';
 import { dropFromEnemy, dropBossReward } from './loot.js';
+import { nextFloat } from '../core/rng.js';
+import { metaValue } from '../meta/tree.js';
 
 export function updatePlayer(state, intent, dt) {
   const p = state.player;
   const cfg = SIM.player;
   const st = playerStats(p);
-  tickDown(p);
+  tickDown(p, st);
 
   const moving = intent.moveX !== 0 || intent.moveY !== 0;
   // Direction de marche dans le monde : moveY > 0 = vers le nord = z négatif
   const moveX = intent.moveX;
   const moveZ = -intent.moveY;
 
-  // ---------- Esquive : une par appui, si elle est rechargée ----------
+  // ---------- Esquive : une par appui, s'il reste une charge ----------
+  // (une seule charge sans amélioration ; deux avec le Second souffle)
   const dashPressed = intent.dash && !p.dashHeld;
   p.dashHeld = intent.dash;
-  if (dashPressed && p.dashCooldown === 0 && p.dashTimer === 0) {
+  if (dashPressed && p.dashCharges > 0 && p.dashTimer === 0) {
     // Dans le sens de la marche, sinon droit devant
     const len = Math.hypot(moveX, moveZ);
     const d = len > 0 ? { x: moveX / len, z: moveZ / len } : dirOf(p.facing);
     p.dashX = d.x;
     p.dashZ = d.z;
     p.dashTimer = ticks(cfg.dash.duration);
-    p.dashCooldown = ticks(st.dashCooldown);
+    p.dashCharges--;
+    if (p.dashCooldown === 0) p.dashCooldown = ticks(st.dashCooldown);
     p.invuln = Math.max(p.invuln, ticks(cfg.dash.invuln));
     p.attackTimer = 0; // l'esquive annule le coup en cours
     p.facing = facingOf(p.dashX, p.dashZ);
@@ -88,33 +92,58 @@ function resolvePlayerHit(state) {
     const r = SIM.enemies[e.type].radius;
     if (!inArc(p.x, p.z, p.facing, st.attackRange, a.arc, e.x, e.z, r)) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
-    if (e.untargetable) continue; // Thanatos disparu dans sa téléportation
-    // Un double de Thanatos s'évanouit au premier coup, sans blesser le vrai
-    if (e.type === 'thanatosDouble') {
-      e.hp = 0;
-      e.noDrop = true;
-      state.events.push({ type: 'dispel', id: e.id, x: e.x, z: e.z });
-      continue;
-    }
-    if (e.invulnerable) {
-      state.events.push({ type: 'deflect', id: e.id, x: e.x, z: e.z });
-      continue;
-    }
-    e.hp -= st.damage;
-    e.hitFlash = ticks(0.12);
-    e.alert = true;
-    // Recul dans l'axe du coup : éloigne l'ennemi et interrompt sa préparation.
-    // Un boss, lui, ne recule pas et ne se laisse pas interrompre.
-    if (!e.boss && !e.part) {
-      e.kvx = dir.x * a.knockback;
-      e.kvz = dir.z * a.knockback;
-      if (e.mode === 'windup') {
-        e.mode = 'recover';
-        e.timer = ticks(0.35);
-      }
-    }
-    state.events.push({ type: 'hit', id: e.id, x: e.x, z: e.z });
+    damageEnemy(state, e, st.damage, dir);
   }
+  removeDeadEnemies(state);
+}
+
+// Inflige des dégâts du héros à un ennemi (coup ou projectile renvoyé).
+// dir : direction du coup, pour le recul. Renvoie false si l'ennemi n'a pas été touché.
+export function damageEnemy(state, e, amount, dir) {
+  if (e.untargetable) return false; // Thanatos disparu dans sa téléportation
+  // Un double de Thanatos s'évanouit au premier coup, sans blesser le vrai
+  if (e.type === 'thanatosDouble') {
+    e.hp = 0;
+    e.noDrop = true;
+    state.events.push({ type: 'dispel', id: e.id, x: e.x, z: e.z });
+    return true;
+  }
+  if (e.invulnerable) {
+    state.events.push({ type: 'deflect', id: e.id, x: e.x, z: e.z });
+    return false;
+  }
+  // Coup du destin (arbre permanent) : chance de dégâts doublés.
+  // Le tirage n'a lieu que si l'amélioration est possédée (sinon la partie ne change pas)
+  const st = playerStats(state.player);
+  let dmg = amount;
+  let crit = false;
+  if (st.critChance > 0 && nextFloat(state.rng) < st.critChance) {
+    dmg *= 2;
+    crit = true;
+  }
+  e.hp -= dmg;
+  e.hitFlash = ticks(0.12);
+  e.alert = true;
+  // Recul dans l'axe du coup : éloigne l'ennemi et interrompt sa préparation.
+  // Un boss, lui, ne recule pas et ne se laisse pas interrompre.
+  if (!e.boss && !e.part) {
+    const kb = SIM.player.attack.knockback;
+    e.kvx = dir.x * kb;
+    e.kvz = dir.z * kb;
+    if (e.mode === 'windup') {
+      e.mode = 'recover';
+      e.timer = ticks(0.35);
+    }
+  }
+  state.events.push({ type: 'hit', id: e.id, x: e.x, z: e.z, crit });
+  return true;
+}
+
+// Retire les ennemis vaincus : butin, Ombres, Tribut d'Hadès, défaite d'un boss
+export function removeDeadEnemies(state) {
+  const p = state.player;
+  const st = playerStats(p);
+  const sh = SIM.shadows;
   // Boss vaincu : ses serviteurs se dissipent avec lui
   const deadBoss = state.enemies.find((e) => e.boss && e.hp <= 0);
   if (deadBoss) {
@@ -128,18 +157,21 @@ function resolvePlayerHit(state) {
     state.hazards = [];
     state.events.push({ type: 'bossDefeated', id: deadBoss.id, bossType: deadBoss.type, x: deadBoss.x, z: deadBoss.z });
     dropBossReward(state, deadBoss);
+    state.shadows += sh.bosses[deadBoss.type] || 0;
     // Thanatos vaincu : c'est la victoire de la partie
     if (deadBoss.type === 'thanatos') {
       state.status = 'victory';
       state.events.push({ type: 'victory' });
     }
   }
-  // Retrait des ennemis vaincus
   const before = state.enemies.length;
   state.enemies = state.enemies.filter((e) => {
     if (e.hp > 0) return true;
     state.events.push({ type: 'enemyDied', id: e.id, enemyType: e.type, x: e.x, z: e.z, boss: e.boss });
-    if (!e.boss && !e.part && !e.noDrop) dropFromEnemy(state, e);
+    if (!e.boss && !e.part && !e.noDrop) {
+      dropFromEnemy(state, e);
+      state.shadows += e.elite ? sh.elite : sh.enemy;
+    }
     // Tribut d'Hadès : la vie revient au fil des ennemis vaincus
     if (st.killsPerHeal && ++p.killsSinceHeal >= st.killsPerHeal) {
       p.killsSinceHeal = 0;
@@ -181,18 +213,28 @@ export function hurtPlayer(state, amount, fromX, fromZ) {
   p.hp = Math.max(0, p.hp - amount);
   p.invuln = ticks(playerStats(p).hurtInvuln);
   state.events.push({ type: 'playerHurt', amount, x: p.x, z: p.z, fromX, fromZ });
-  if (p.hp === 0) {
+  if (p.hp === 0 && p.defiance > 0) {
+    // Défi de la Mort (arbre permanent) : on se relève, une fois par partie
+    p.defiance--;
+    p.hp = Math.max(1, Math.round(p.maxHp * metaValue(p.meta, 'defiance')));
+    p.invuln = ticks(SIM.player.defianceInvuln);
+    state.events.push({ type: 'defiance', x: p.x, z: p.z });
+  } else if (p.hp === 0) {
     state.status = 'dead';
     state.events.push({ type: 'playerDied', x: p.x, z: p.z });
   }
   return true;
 }
 
-function tickDown(p) {
+function tickDown(p, st) {
   if (p.attackTimer > 0) p.attackTimer--;
   if (p.attackCooldown > 0) p.attackCooldown--;
   if (p.dashTimer > 0) p.dashTimer--;
-  if (p.dashCooldown > 0) p.dashCooldown--;
+  // Recharge des esquives : une charge à la fois
+  if (p.dashCooldown > 0 && --p.dashCooldown === 0 && p.dashCharges < st.dashCharges) {
+    p.dashCharges++;
+    if (p.dashCharges < st.dashCharges) p.dashCooldown = ticks(st.dashCooldown);
+  }
   if (p.invuln > 0) p.invuln--;
 }
 

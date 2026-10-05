@@ -22,6 +22,9 @@ import { SIM } from './systems/simConfig.js';
 import { ZONE_THEMES } from './render/zoneThemes.js';
 import { zoneOf, FLOORS_PER_ZONE } from './dungeon/zones.js';
 import { createInput } from './controls/input.js';
+import { recordRun } from './meta/profile.js';
+import { loadProfile, saveProfile } from './ui/storage.js';
+import { createThreshold } from './ui/threshold.js';
 
 // ---------------------------------------------------------------------------
 // Organisation :
@@ -41,8 +44,14 @@ const params = new URLSearchParams(window.location.search);
 const randomSeed = () => Math.floor(Math.random() * 1e9).toString(36);
 let seed = params.get('seed') || randomSeed();
 
+// ---- Profil (méta-progression, sauvegardé dans le navigateur) ----
+// Objet conteneur : l'écran du Seuil et la boucle partagent le même profil
+const profile = { current: loadProfile() };
+// Chaque partie démarre avec les améliorations permanentes achetées au Seuil
+const newState = (s) => createGameState(s, { meta: profile.current.ranks });
+
 // ---- État ----
-let state = createGameState(seed);
+let state = newState(seed);
 
 // ---- Rendu ----
 const canvas = document.getElementById('scene');
@@ -148,16 +157,18 @@ startText.innerHTML = DEVICE.isMobile
   ? 'Touche l’écran pour jouer<br><small>Pouce gauche : se déplacer · Boutons : frapper, esquiver</small>'
   : 'Clique pour jouer<br><small>ZQSD / WASD : se déplacer · Souris : viser · Clic : frapper · Espace : esquiver · Échap : pause</small>';
 
-startScreen.addEventListener('click', () => {
+startScreen.addEventListener('click', (e) => {
+  if (e.target.closest('button')) return; // boutons du Seuil / d'abandon
   if (DEVICE.isMobile) enterFullscreen();
   setPlaying(true);
 });
 window.addEventListener('keydown', (e) => {
+  if (threshold.isOpen()) return;
   if ((e.code === 'Escape' || e.code === 'KeyP') && state.status === 'playing') setPlaying(!playing);
 });
 // Quitter l'onglet met le jeu en pause
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && state.status === 'playing') setPlaying(false);
+  if (document.hidden && state.status === 'playing' && !threshold.isOpen()) setPlaying(false);
 });
 
 function setPlaying(value) {
@@ -172,6 +183,9 @@ function setPlaying(value) {
   if (!value) {
     startText.innerHTML = DEVICE.isMobile ? 'Touche pour reprendre' : 'Clique pour reprendre';
   }
+  // Avant la première partie : accès au Seuil ; en pause : abandon possible
+  $('btn-open-threshold').hidden = started;
+  $('btn-abandon').hidden = !started;
   loop.reset();
 }
 
@@ -207,6 +221,7 @@ function updateHud() {
   healthText.textContent = `${p.hp} / ${p.maxHp}`;
   $('kills').textContent = `${state.kills} vaincu${state.kills > 1 ? 's' : ''}`;
   $('gold').textContent = `${state.gold} obole${state.gold > 1 ? 's' : ''}`;
+  $('shadows').textContent = `${state.shadows} Ombre${state.shadows > 1 ? 's' : ''}`;
   const boonKey = JSON.stringify(p.boons);
   if (boonKey !== lastBoonKey) {
     lastBoonKey = boonKey;
@@ -282,8 +297,8 @@ $('btn-heal').addEventListener('click', () => (pendingAction = { shop: 'heal' })
 $('btn-reroll').addEventListener('click', () => (pendingAction = { shop: 'reroll' }));
 window.addEventListener('keydown', (e) => {
   if (state.status !== 'choosing') return;
-  const n = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(e.code);
-  if (n >= 0) pendingAction = { choice: n % 3 };
+  const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4'].indexOf(e.code);
+  if (n >= 0) pendingAction = { choice: n % 4 };
   if (e.code === 'KeyH') pendingAction = { shop: 'heal' };
   if (e.code === 'KeyR') pendingAction = { shop: 'reroll' };
 });
@@ -294,6 +309,7 @@ function showDeath() {
   const n = state.floorIndex + 1;
   $('death-text').innerHTML =
     `Étage ${n} · ${state.kills} ennemi${state.kills > 1 ? 's' : ''} vaincu${state.kills > 1 ? 's' : ''} · ${state.gold} oboles<br>` +
+    `<span class="earned">+${lastEarned} Ombres</span><br>` +
     `${Object.keys(state.player.boons).length ? `Bienfaits : ${Object.entries(state.player.boons).map(([id, k]) => BOONS[id].name + (k > 1 ? ` ×${k}` : '')).join(', ')}<br>` : ''}` +
     `<small>Graine ${seed}</small>`;
   deathScreen.classList.remove('hidden');
@@ -307,14 +323,52 @@ function showVictory() {
     .join(', ');
   $('victory-text').innerHTML =
     `Descente en ${time} · ${state.kills} ennemis vaincus · ${state.gold} oboles<br>` +
+    `<span class="earned">+${lastEarned} Ombres</span><br>` +
     (boons ? `Bienfaits : ${boons}<br>` : '') +
     `<small>Graine ${seed}</small>`;
   victoryScreen.classList.remove('hidden');
 }
 
+// ---- Fin de partie et Seuil ----
+// Les Ombres sont encaissées dès la fin de la partie (mort, victoire ou abandon)
+// et sauvegardées aussitôt : fermer l'onglet ensuite ne fait rien perdre.
+let recorded = false;
+let lastEarned = 0;
+function endOfRun() {
+  if (recorded) return;
+  recorded = true;
+  lastEarned = recordRun(profile.current, state);
+  saveProfile(profile.current);
+}
+const threshold = createThreshold({
+  root: $('threshold'),
+  profile,
+  onChange: () => saveProfile(profile.current),
+  onDescend: (sameSeed) => {
+    threshold.close();
+    restart(sameSeed ? seed : randomSeed());
+    setPlaying(true);
+  },
+});
+function openThreshold() {
+  deathScreen.classList.add('hidden');
+  victoryScreen.classList.add('hidden');
+  startScreen.classList.add('hidden');
+  threshold.open(recorded ? lastEarned : 0);
+}
+$('btn-open-threshold').addEventListener('click', openThreshold);
+$('btn-death-threshold').addEventListener('click', openThreshold);
+$('btn-victory-threshold').addEventListener('click', openThreshold);
+$('btn-abandon').addEventListener('click', () => {
+  endOfRun();
+  openThreshold();
+});
+
 function restart(newSeed) {
   seed = newSeed;
-  state = createGameState(seed);
+  state = newState(seed);
+  recorded = false;
+  lastEarned = 0;
   window.__game.state = state;
   deathScreen.classList.add('hidden');
   victoryScreen.classList.add('hidden');
@@ -331,7 +385,6 @@ function restart(newSeed) {
   deathTimer = 0;
 }
 $('btn-retry').addEventListener('click', () => restart(seed));
-$('btn-victory-retry').addEventListener('click', () => restart(seed));
 $('btn-victory-new').addEventListener('click', () => restart(randomSeed()));
 $('btn-new').addEventListener('click', () => restart(randomSeed()));
 
@@ -376,6 +429,7 @@ function tick() {
     if (ev.type === 'roomCleared' && state.dungeon.rooms.find((r) => r.id === ev.roomId)?.type !== 'boss') {
       showBanner('Salle purifiée', 'calm');
     }
+    if (ev.type === 'defiance') showBanner('Défi de la Mort', 'calm');
     if (ev.type === 'playerHurt') {
       hurtFlash.classList.add('on');
       clearTimeout(hurtTimeout);
@@ -436,9 +490,11 @@ function frame(timestamp) {
 
   // Mort ou victoire : on laisse un instant pour voir la scène avant l'écran de fin
   if (state.status === 'dead' || state.status === 'victory') {
+    endOfRun();
     deathTimer += dt;
-    if (state.status === 'dead' && deathTimer > 1 && deathScreen.classList.contains('hidden')) showDeath();
-    if (state.status === 'victory' && deathTimer > 2 && victoryScreen.classList.contains('hidden')) showVictory();
+    const waiting = !threshold.isOpen(); // écran de fin pas encore quitté pour le Seuil
+    if (state.status === 'dead' && waiting && deathTimer > 1 && deathScreen.classList.contains('hidden')) showDeath();
+    if (state.status === 'victory' && waiting && deathTimer > 2 && victoryScreen.classList.contains('hidden')) showVictory();
   }
 
   renderer.render(scene, cam.camera);
@@ -469,7 +525,10 @@ function lerpAngle(a, b, t) {
 // Bloque les gestes du navigateur (défilement, pinch-zoom iOS, double-tap, menu contextuel)
 function blockBrowserGestures() {
   const prevent = (e) => e.preventDefault();
-  document.addEventListener('touchmove', prevent, { passive: false });
+  // Les écrans à faire défiler (Seuil, Charon) gardent le défilement au doigt
+  document.addEventListener('touchmove', (e) => !e.target.closest?.('#threshold, #charon') && e.preventDefault(), {
+    passive: false,
+  });
   document.addEventListener('gesturestart', prevent);
   document.addEventListener('dblclick', prevent);
   document.addEventListener('contextmenu', prevent);
