@@ -15,7 +15,8 @@ Le propriétaire du dépôt n'est pas développeur de jeux : il juge sur des ré
 ## Architecture (préparée pour un futur multijoueur)
 
 - `src/state/` : état pur, sérialisable en JSON (y compris l'état du générateur aléatoire).
-- `src/systems/`, `src/dungeon/` : simulation et génération pures, sans Three.js ni navigateur, exécutables dans Node.
+- `src/systems/`, `src/dungeon/` : simulation et génération pures, sans Three.js ni navigateur, exécutables dans Node. Les réglages des règles sont dans `src/systems/simConfig.js` ; `src/config.js` ne contient que l'affichage et les contrôles.
+- Génération des étages : BSP (`src/dungeon/generate.js`), générateur dérivé de (graine, numéro d'étage). Les tests vérifient sur 300 graines que chaque étage est jouable.
 - `src/render/` : lit l'état sans jamais le modifier.
 - `src/controls/` : produisent une "intention" `{ moveX, moveY, aimX, aimY, attack, dash }`.
 - Boucle à pas fixe 60 Hz (`src/core/fixedStep.js`) + interpolation d'affichage.
