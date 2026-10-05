@@ -60,7 +60,7 @@ test('vitesse de marche respectée et arrêt net quand on lâche', () => {
 
 test("un bot va du départ à l'escalier et descend, sur 25 graines", () => {
   for (let s = 0; s < 25; s++) {
-    const state = createGameState(`bot-${s}`);
+    const state = createGameState(`bot-${s}`, { enemies: false });
     const bot = makePathBot(state.dungeon, state.dungeon.stairs);
     const maxTicks = 60 * 90; // 90 secondes de jeu maximum
     let t = 0;

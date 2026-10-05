@@ -4,39 +4,95 @@
 
 import { createRng } from '../core/rng.js';
 import { generateFloor } from '../dungeon/generate.js';
+import { populateFloor } from '../dungeon/populate.js';
+import { SIM, ticks } from '../systems/simConfig.js';
 
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
-export function createGameState(seed, params) {
+// options.enemies : false pour un donjon vide (tests d'exploration)
+// options.dungeonParams : réglages du générateur d'étages (tests)
+export function createGameState(seed, options = {}) {
   const state = {
     version: STATE_VERSION,
     seed: String(seed),
+    options: { enemies: options.enemies !== false, dungeonParams: options.dungeonParams || null },
     tick: 0, // nombre de pas de simulation écoulés (60 par seconde)
+    status: 'playing', // 'playing' ou 'dead'
     floorIndex: 0, // étage actuel (0 = premier)
-    // Générateur de la partie (combats, butin… aux étapes suivantes).
+    kills: 0,
+    // Générateur de la partie (combats, butin…).
     // La génération des étages a ses propres générateurs dérivés de la graine.
     rng: createRng(`${seed}/partie`),
+    nextId: 1, // numéro du prochain ennemi ou projectile créé
     dungeon: null,
     player: {
       x: 0,
       z: 0,
       vx: 0, // vitesse (m/s)
       vz: 0,
-      facing: 0, // orientation (radians, 0 = vers le bas de l'écran)
+      facing: 0, // orientation (radians, 0 = vers le sud, z croissant)
+      hp: SIM.player.maxHp,
+      maxHp: SIM.player.maxHp,
+      // Compteurs en pas de simulation (0 = inactif)
+      attackTimer: 0, // durée restante du coup en cours
+      attackCooldown: 0,
+      dashTimer: 0, // durée restante de l'esquive en cours
+      dashCooldown: 0,
+      dashX: 0, // direction de l'esquive
+      dashZ: 0,
+      dashHeld: false, // bouton d'esquive déjà enfoncé au pas précédent (une esquive par appui)
+      invuln: 0, // invulnérabilité restante
     },
+    enemies: [],
+    projectiles: [],
+    // Ce qui s'est passé pendant le DERNIER pas (coups, morts…), pour que le rendu
+    // affiche des effets. Vidé à chaque pas : ce n'est pas une mémoire de la partie.
+    events: [],
   };
-  enterFloor(state, 0, params);
+  enterFloor(state, 0);
   return state;
 }
 
-// Génère l'étage demandé et place le joueur au départ
-export function enterFloor(state, floorIndex, params) {
+// Génère l'étage demandé, le peuple et place le joueur au départ
+export function enterFloor(state, floorIndex) {
   state.floorIndex = floorIndex;
-  state.dungeon = generateFloor(state.seed, floorIndex, params);
+  state.dungeon = generateFloor(state.seed, floorIndex, state.options.dungeonParams || undefined);
   const s = state.dungeon.start;
-  // Centre de la case de départ
-  state.player.x = s.c + 0.5;
-  state.player.z = s.r + 0.5;
-  state.player.vx = 0;
-  state.player.vz = 0;
+  const p = state.player;
+  p.x = s.c + 0.5;
+  p.z = s.r + 0.5;
+  p.vx = 0;
+  p.vz = 0;
+  p.dashTimer = 0;
+
+  state.projectiles = [];
+  state.enemies = [];
+  if (state.options.enemies) {
+    for (const e of populateFloor(state.dungeon, state.seed, floorIndex)) {
+      state.enemies.push(createEnemy(state, e));
+    }
+  }
+}
+
+export function createEnemy(state, { type, x, z, roomId = -1, firstShotDelay = 0 }) {
+  const cfg = SIM.enemies[type];
+  return {
+    id: state.nextId++,
+    type,
+    x,
+    z,
+    kvx: 0, // vitesse de recul (après un coup reçu)
+    kvz: 0,
+    facing: 0,
+    hp: cfg.hp,
+    maxHp: cfg.hp,
+    roomId,
+    alert: false, // a repéré le héros (ne l'oublie plus ensuite)
+    mode: 'idle', // 'idle' | 'chase' | 'windup' | 'recover'
+    timer: 0, // pas restants dans le mode courant
+    shotCooldown: type === 'archer' ? ticks(0.6) + firstShotDelay : 0,
+    aimX: 0, // direction figée pendant la préparation d'un coup / d'un tir
+    aimZ: 0,
+    hitFlash: 0, // pas restants de clignotement (pour le rendu)
+  };
 }

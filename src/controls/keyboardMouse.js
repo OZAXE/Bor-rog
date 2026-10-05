@@ -1,4 +1,5 @@
 // Contrôles PC : clavier pour se déplacer, souris pour viser.
+// Clic gauche (ou J) : frapper. Espace (ou Maj, K) : esquiver.
 //
 // On utilise event.code (touche PHYSIQUE) et non event.key (caractère tapé) :
 // "KeyW" est le Z en AZERTY et le W en QWERTY, donc ZQSD et WASD marchent sans réglage.
@@ -8,10 +9,13 @@ const KEYS = {
   down: ['KeyS', 'ArrowDown'],
   left: ['KeyA', 'ArrowLeft'], // Q en AZERTY
   right: ['KeyD', 'ArrowRight'],
+  attack: ['KeyJ', 'Enter'],
+  dash: ['Space', 'ShiftLeft', 'ShiftRight', 'KeyK'],
 };
 
-export function createKeyboardMouse() {
+export function createKeyboardMouse(canvas) {
   const pressed = new Set();
+  let mouseAttack = false; // bouton gauche maintenu
   // Position de la souris dans la fenêtre ; null tant qu'elle n'a pas bougé
   // (sur une tablette avec clavier, on ne vise donc pas un point fantôme)
   let mouse = null;
@@ -25,7 +29,18 @@ export function createKeyboardMouse() {
   });
   window.addEventListener('keyup', (e) => pressed.delete(e.code));
   // Si la fenêtre perd le focus, on relâche tout (sinon le héros continue d'avancer)
-  window.addEventListener('blur', () => pressed.clear());
+  window.addEventListener('blur', () => {
+    pressed.clear();
+    mouseAttack = false;
+  });
+
+  // Clic gauche maintenu = attaque (sur le jeu uniquement, pas sur l'interface)
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button === 0) mouseAttack = true;
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (e.pointerType === 'mouse' && e.button === 0) mouseAttack = false;
+  });
 
   window.addEventListener('pointermove', (e) => {
     if (e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY };
@@ -41,6 +56,12 @@ export function createKeyboardMouse() {
     },
     getMouse() {
       return mouse;
+    },
+    get attack() {
+      return mouseAttack || is('attack');
+    },
+    get dash() {
+      return is('dash');
     },
   };
 }

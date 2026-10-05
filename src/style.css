@@ -118,6 +118,112 @@ body {
   100% { opacity: 0; }
 }
 
+/* ---------- Vie et compteur ---------- */
+#health {
+  position: absolute;
+  left: calc(14px + env(safe-area-inset-left));
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#health-bar {
+  width: clamp(120px, 22vw, 220px);
+  height: 14px;
+  border: 2px solid #8a6a2c;
+  background: #1a0a0c;
+  box-shadow: 0 0 0 2px #05080a;
+}
+
+#health-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(#e8414f, #a01d2a);
+  transition: width 0.15s;
+}
+
+#health-text {
+  font-size: 15px;
+  color: var(--texte);
+  text-shadow: 0 1px 2px #000;
+}
+
+#kills {
+  position: absolute;
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  font-size: 15px;
+  color: var(--accent);
+  text-shadow: 0 1px 2px #000;
+}
+
+#hurt-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 40%, rgba(200, 0, 20, 0.55) 100%);
+  opacity: 0;
+  transition: opacity 0.35s;
+}
+
+#hurt-flash.on {
+  opacity: 1;
+  transition: none;
+}
+
+/* ---------- Écran de mort ---------- */
+#death-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+  text-align: center;
+  background: radial-gradient(ellipse at center, rgba(60, 0, 10, 0.75), rgba(5, 8, 10, 0.92));
+}
+
+#death-screen.hidden {
+  display: none;
+}
+
+#death-screen h2 {
+  margin: 0;
+  font-size: clamp(32px, 9vw, 56px);
+  letter-spacing: 4px;
+  color: #e8414f;
+}
+
+#death-screen p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+#death-screen .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+#death-screen button {
+  font: 600 15px var(--antique);
+  color: var(--fond);
+  background: var(--accent);
+  border: 2px solid #8a6a2c;
+  padding: 12px 18px;
+  cursor: pointer;
+}
+
+#death-screen button + button {
+  background: transparent;
+  color: var(--accent);
+}
+
 /* ---------- Contrôles tactiles ---------- */
 #touch-ui {
   position: absolute;
@@ -129,7 +235,7 @@ body {
 }
 
 /* Partie gauche de l'écran : le joystick apparaît là où le pouce se pose.
-   La partie droite est laissée libre pour les boutons d'action (étape 3). */
+   Partie droite : boutons Frapper et Esquiver. */
 #joystick-zone {
   position: absolute;
   top: 0;
@@ -217,4 +323,48 @@ body {
 #start-seed {
   font: 13px ui-monospace, monospace;
   opacity: 0.6;
+}
+
+.touch-btn {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid rgba(242, 201, 107, 0.6);
+  background: rgba(5, 8, 10, 0.45);
+  color: var(--texte);
+  font: 600 12px var(--antique);
+  touch-action: none;
+  padding: 0;
+}
+
+.touch-btn.pressed {
+  background: rgba(242, 201, 107, 0.35);
+}
+
+#btn-attack {
+  width: 84px;
+  height: 84px;
+  right: calc(26px + env(safe-area-inset-right));
+  bottom: calc(46px + env(safe-area-inset-bottom));
+}
+
+#btn-dash {
+  width: 64px;
+  height: 64px;
+  right: calc(122px + env(safe-area-inset-right));
+  bottom: calc(26px + env(safe-area-inset-bottom));
+  border-color: rgba(159, 232, 255, 0.6);
+}
+
+/* Sur mobile, la vie remonte un peu pour ne pas gêner le pouce gauche */
+@media (pointer: coarse) {
+  #health {
+    top: calc(10px + env(safe-area-inset-top));
+    bottom: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  #kills {
+    bottom: auto;
+    top: calc(52px + env(safe-area-inset-top));
+  }
 }

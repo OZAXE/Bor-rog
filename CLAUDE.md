@@ -28,6 +28,13 @@ Le propriétaire du dépôt n'est pas développeur de jeux : il juge sur des ré
 - `src/controls/` : produisent une "intention" `{ moveX, moveY, aimX, aimY, attack, dash }` exprimée dans le repère du MONDE (la conversion écran -> monde selon la caméra se fait côté client).
 - Boucle à pas fixe 60 Hz (`src/core/fixedStep.js`) + interpolation d'affichage.
 
+### Combat (étape 3)
+
+- Règles et chiffres : `src/systems/simConfig.js` (durées en secondes, converties en pas entiers par `ticks()`).
+- Héros : `src/systems/player.js` (attaque en arc, visée auto sans souris, esquive invulnérable, invulnérabilité après un coup). Ennemis : `src/systems/enemies.js` (machine à états idle / chase / windup / recover ; direction figée au début de la préparation pour que l'attaque soit lisible et esquivable). Flèches : `src/systems/projectiles.js`. Peuplement : `src/dungeon/populate.js` (générateur distinct de celui du plan).
+- La simulation signale ce qui s'est passé via `state.events` (vidé à chaque pas) ; le rendu en tire les effets (`src/render/effects.js`). Les effets peuvent utiliser Math.random : ils n'influencent jamais la partie.
+- Budget mesuré : ~60 appels de dessin et ~11 000 triangles par image.
+
 ### Déterminisme (règle stricte)
 
 - Tout le hasard de la simulation passe par `src/core/rng.js` (mulberry32), dont l'état vit dans l'état du jeu.

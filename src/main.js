@@ -11,6 +11,8 @@ import { EMPTY_INTENT } from './systems/intent.js';
 import { createDungeonView, createDungeonResources } from './render/dungeonView.js';
 import { createAtlasTexture, createHaloTexture, createToonGradient } from './render/textures.js';
 import { createPlayerView } from './render/playerView.js';
+import { createEnemyViews, createProjectileView } from './render/enemyViews.js';
+import { createEffects } from './render/effects.js';
 import { createInput } from './controls/input.js';
 
 // ---------------------------------------------------------------------------
@@ -18,6 +20,8 @@ import { createInput } from './controls/input.js';
 //   contrôles -> intention -> simulation (state + systems, pure) -> rendu (render/)
 // La simulation tourne à pas fixe (60 Hz) ; le rendu suit le rafraîchissement de
 // l'écran et interpole entre deux pas pour rester fluide sur les écrans 90/120 Hz.
+// La simulation signale ce qui s'est passé (coups, morts…) par des "événements"
+// que le rendu transforme en effets visuels.
 // ---------------------------------------------------------------------------
 
 blockBrowserGestures();
@@ -26,10 +30,11 @@ blockBrowserGestures();
 // ?seed=xxx dans l'adresse permet de rejouer un donjon précis.
 // Sinon on en tire une au hasard (ici Math.random est permis : on est hors simulation).
 const params = new URLSearchParams(window.location.search);
-const seed = params.get('seed') || Math.floor(Math.random() * 1e9).toString(36);
+const randomSeed = () => Math.floor(Math.random() * 1e9).toString(36);
+let seed = params.get('seed') || randomSeed();
 
 // ---- État ----
-const state = createGameState(seed);
+let state = createGameState(seed);
 
 // ---- Rendu ----
 const canvas = document.getElementById('scene');
@@ -66,9 +71,12 @@ const makeDungeonView = () =>
 let dungeonView = makeDungeonView();
 let viewFloor = state.floorIndex;
 const playerView = createPlayerView(scene, textures.toon);
+const enemyViews = createEnemyViews(scene, textures.toon, cam.camera.quaternion);
+const projectileView = createProjectileView(scene);
+const effects = createEffects(scene, textures.halo);
 
 // ---- Entrées ----
-const input = createInput();
+const input = createInput(canvas);
 
 // Visée à la souris : on projette le pointeur sur le sol et on prend la direction
 // héros -> point visé. Le plan doit être à la même hauteur que la position du héros
@@ -89,40 +97,42 @@ function aimFromMouse(px, py) {
 }
 
 // ---- Interface ----
-const startScreen = document.getElementById('start-screen');
-const startText = document.getElementById('start-text');
-const floorLabel = document.getElementById('floor-label');
-const banner = document.getElementById('floor-banner');
-document.getElementById('start-seed').textContent = `Graine : ${seed}`;
-document.getElementById('seed-label').textContent = `graine ${seed}`;
+const $ = (id) => document.getElementById(id);
+const startScreen = $('start-screen');
+const startText = $('start-text');
+const banner = $('floor-banner');
+const healthFill = $('health-fill');
+const healthText = $('health-text');
+const hurtFlash = $('hurt-flash');
+const deathScreen = $('death-screen');
 let playing = false;
+let started = false;
 
 startText.innerHTML = DEVICE.isMobile
-  ? 'Touche l’écran pour jouer<br><small>Pouce gauche : se déplacer</small>'
-  : 'Clique pour jouer<br><small>ZQSD / WASD : se déplacer · Souris : viser · Échap : pause</small>';
+  ? 'Touche l’écran pour jouer<br><small>Pouce gauche : se déplacer · Boutons : frapper, esquiver</small>'
+  : 'Clique pour jouer<br><small>ZQSD / WASD : se déplacer · Souris : viser · Clic : frapper · Espace : esquiver · Échap : pause</small>';
 
 startScreen.addEventListener('click', () => {
   if (DEVICE.isMobile) enterFullscreen();
   setPlaying(true);
 });
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' || e.code === 'KeyP') setPlaying(!playing);
+  if ((e.code === 'Escape' || e.code === 'KeyP') && state.status === 'playing') setPlaying(!playing);
 });
 // Quitter l'onglet met le jeu en pause
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) setPlaying(false);
+  if (document.hidden && state.status === 'playing') setPlaying(false);
 });
 
-let started = false;
 function setPlaying(value) {
   playing = value;
+  startScreen.classList.toggle('hidden', value);
   // Le bandeau "Étage 1" n'apparaît qu'au vrai début de la partie
   // (sinon il s'anime derrière l'écran titre et chevauche le titre)
   if (value && !started) {
     started = true;
     showFloor(true);
   }
-  startScreen.classList.toggle('hidden', value);
   if (!value) {
     startText.innerHTML = DEVICE.isMobile ? 'Touche pour reprendre' : 'Clique pour reprendre';
   }
@@ -130,30 +140,91 @@ function setPlaying(value) {
 }
 
 function showFloor(withBanner) {
-  floorLabel.textContent = `Étage ${state.floorIndex + 1}`;
+  $('floor-label').textContent = `Étage ${state.floorIndex + 1}`;
   if (!withBanner) return;
   banner.textContent = `Étage ${state.floorIndex + 1}`;
   banner.classList.remove('show');
   void banner.offsetWidth; // relance l'animation CSS
   banner.classList.add('show');
 }
-showFloor(false);
+
+function showSeed() {
+  $('start-seed').textContent = `Graine : ${seed}`;
+  $('seed-label').textContent = `graine ${seed}`;
+  // L'adresse affichée permet de partager / rejouer cette graine
+  const url = new URL(window.location.href);
+  url.searchParams.set('seed', seed);
+  window.history.replaceState(null, '', url);
+}
+
+function updateHud() {
+  const p = state.player;
+  healthFill.style.width = `${(100 * p.hp) / p.maxHp}%`;
+  healthText.textContent = `${p.hp} / ${p.maxHp}`;
+  $('kills').textContent = `${state.kills} vaincu${state.kills > 1 ? 's' : ''}`;
+}
+
+// ---- Mort et nouvelle partie ----
+let deathTimer = 0;
+function showDeath() {
+  const n = state.floorIndex + 1;
+  $('death-text').innerHTML =
+    `Étage ${n} · ${state.kills} ennemi${state.kills > 1 ? 's' : ''} vaincu${state.kills > 1 ? 's' : ''}<br>` +
+    `<small>Graine ${seed}</small>`;
+  deathScreen.classList.remove('hidden');
+}
+function restart(newSeed) {
+  seed = newSeed;
+  state = createGameState(seed);
+  window.__game.state = state;
+  deathScreen.classList.add('hidden');
+  prev.x = state.player.x;
+  prev.z = state.player.z;
+  prev.facing = state.player.facing;
+  prevEnemies.clear();
+  showSeed();
+  rebuildFloor();
+  updateHud();
+  loop.reset();
+  deathTimer = 0;
+}
+$('btn-retry').addEventListener('click', () => restart(seed));
+$('btn-new').addEventListener('click', () => restart(randomSeed()));
+
+function rebuildFloor() {
+  dungeonView.dispose();
+  dungeonView = makeDungeonView();
+  viewFloor = state.floorIndex;
+  showFloor(true);
+}
 
 // ---- Boucle de jeu ----
 const loop = createFixedStep(STEP);
 const timer = new THREE.Timer();
-// Position avant/après le dernier pas, pour l'interpolation visuelle
+// Positions au pas précédent, pour l'interpolation visuelle
 const prev = { x: state.player.x, z: state.player.z, facing: state.player.facing };
+const prevEnemies = new Map(); // id -> { x, z }
+const enemyPos = new Map(); // id -> position interpolée
+let hurtTimeout = 0;
 
 function tick() {
   prev.x = state.player.x;
   prev.z = state.player.z;
   prev.facing = state.player.facing;
+  for (const e of state.enemies) prevEnemies.set(e.id, { x: e.x, z: e.z });
   stepGame(state, playing ? input.getIntent(cam.screenToWorld, aimFromMouse) : EMPTY_INTENT);
+  for (const ev of state.events) {
+    effects.handle(ev);
+    if (ev.type === 'playerHurt') {
+      hurtFlash.classList.add('on');
+      clearTimeout(hurtTimeout);
+      hurtTimeout = setTimeout(() => hurtFlash.classList.remove('on'), 90);
+    }
+  }
 }
 
 // Compteur d'images par seconde (affichage de mise au point)
-const debugEl = document.getElementById('debug');
+const debugEl = $('debug');
 let fpsFrames = 0;
 let fpsTime = 0;
 
@@ -163,26 +234,45 @@ function frame(timestamp) {
   const dt = timer.getDelta();
   const time = timer.getElapsed();
 
-  const alpha = playing ? loop.advance(dt, tick) : 1;
+  const alpha = playing && state.status === 'playing' ? loop.advance(dt, tick) : 1;
 
   // Changement d'étage : on reconstruit le décor et on n'interpole pas (téléportation)
   if (state.floorIndex !== viewFloor) {
-    dungeonView.dispose();
-    dungeonView = makeDungeonView();
-    viewFloor = state.floorIndex;
+    rebuildFloor();
     prev.x = state.player.x;
     prev.z = state.player.z;
-    showFloor(true);
+    prevEnemies.clear();
   }
 
   const p = state.player;
   const x = prev.x + (p.x - prev.x) * alpha;
   const z = prev.z + (p.z - prev.z) * alpha;
   const facing = lerpAngle(prev.facing, p.facing, alpha);
-  playerView.update(x, z, facing, Math.hypot(p.vx, p.vz), time);
+  playerView.update(x, z, facing, Math.hypot(p.vx, p.vz), time, {
+    blink: p.invuln > 0 && p.dashTimer === 0 && state.status === 'playing',
+    dashing: p.dashTimer > 0,
+  });
   heroLight.position.set(x, CONFIG.heroLight.height, z);
-  cam.follow(x, z);
+
+  enemyPos.clear();
+  for (const e of state.enemies) {
+    const pe = prevEnemies.get(e.id) || e;
+    enemyPos.set(e.id, { x: pe.x + (e.x - pe.x) * alpha, z: pe.z + (e.z - pe.z) * alpha });
+  }
+  enemyViews.update(state.enemies, enemyPos, time);
+  projectileView.update(state.projectiles, 1 - alpha, STEP);
+  effects.update(dt);
+
+  const shake = effects.shakeOffset();
+  cam.follow(x + shake.x, z + shake.z);
   dungeonView.update(time);
+  updateHud();
+
+  // Mort : on laisse une seconde pour voir la scène avant l'écran de fin
+  if (state.status === 'dead') {
+    deathTimer += dt;
+    if (deathTimer > 1 && deathScreen.classList.contains('hidden')) showDeath();
+  }
 
   renderer.render(scene, cam.camera);
 
@@ -194,6 +284,10 @@ function frame(timestamp) {
     fpsTime = 0;
   }
 }
+
+showSeed();
+showFloor(false);
+updateHud();
 requestAnimationFrame(frame);
 
 // Interpolation d'angle par le plus court chemin (évite un tour complet entre -π et π)
@@ -224,4 +318,4 @@ function enterFullscreen() {
 }
 
 // Accès de mise au point depuis la console du navigateur (et pour les tests visuels)
-window.__game = { seed, state, CONFIG, scene, cam };
+window.__game = { seed, state, CONFIG, scene, cam, renderer };
