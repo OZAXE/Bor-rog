@@ -4,7 +4,7 @@
 //   avec les Ombres. Chaque niveau gagné donne un petit bonus passif ET un point de talent.
 // - Chaque attribut a son arbre : les talents s'ouvrent par paliers selon le niveau
 //   de l'attribut (1, 4, 7, 10), en 2 chemins qui mènent à un talent ultime.
-// - Il y a moins de points (36) que de rangs de talents (~50) : on construit un build.
+// - Il y a bien moins de points (36) qu'il n'en faut pour tout prendre (~70) : on construit un build.
 //   Les talents se reprennent gratuitement ; les niveaux d'attributs restent acquis.
 // Cet arbre est commun à toutes les classes ; chaque classe aura plus tard le sien en plus.
 //
@@ -13,14 +13,17 @@
 
 export const ATTR_MAX = 10;
 // Prix (en Ombres) pour passer du niveau L au niveau L+1 : ATTR_COSTS[L - 1]
-export const ATTR_COSTS = [30, 45, 65, 90, 120, 155, 195, 240, 290];
+export const ATTR_COSTS = [40, 60, 90, 125, 165, 215, 270, 330, 400];
 // Niveau d'attribut requis par palier de talents
 export const TIER_LEVELS = [1, 4, 7, 10];
+// Points de talent par rang selon le palier : les talents du haut de l'arbre coûtent plus
+// cher (36 points en tout : un arbre complet et le bas d'un deuxième)
+export const TIER_COSTS = [1, 2, 3, 4];
 
 // bonus(n) : bonus passif pour n niveaux gagnés (niveau - 1), affiché au Seuil
 export const ATTRS = {
   ares: { name: 'Arès', theme: 'Force', bonus: (n) => `Coups ${n * 2} % plus rapides` },
-  demeter: { name: 'Déméter', theme: 'Endurance', bonus: (n) => `+${Math.floor(n / 2)} PV maximum` },
+  demeter: { name: 'Déméter', theme: 'Endurance', bonus: (n) => `+${Math.floor(n / 3)} PV maximum` },
   hermes: { name: 'Hermès', theme: 'Ruse', bonus: (n) => `+${(n * 1.5).toLocaleString('fr-FR')} % de vitesse` },
   charon: { name: 'Charon', theme: 'Fortune', bonus: (n) => `+${n * 2} % d'Ombres gagnées` },
 };
@@ -29,13 +32,13 @@ export const ATTR_IDS = Object.keys(ATTRS);
 // Effet chiffré des niveaux d'attributs (n = niveau - 1)
 export const ATTR_EFFECT = {
   ares: 0.02, // cadence des coups, par niveau
-  demeter: 0.5, // PV maximum par niveau (arrondi vers le bas)
+  demeter: 1 / 3, // PV maximum par niveau (arrondi vers le bas : +1 tous les 3 niveaux)
   hermes: 0.015, // vitesse de marche, par niveau
   charon: 0.02, // Ombres gagnées, par niveau
 };
 
 // Talents. tier : palier (0 à 3) ; lane : chemin (0 = gauche, 1 = droite, 0.5 = ultime au centre)
-// ranks : rangs possibles (1 point de talent par rang) ; per : valeur par rang
+// ranks : rangs possibles (prix d'un rang : TIER_COSTS du palier) ; per : valeur par rang
 // requires : il faut au moins 1 rang dans UN de ces talents (le parent dans l'arbre)
 export const TALENTS = {
   // ---------- Arès : force ----------
@@ -43,31 +46,32 @@ export const TALENTS = {
     text: (v) => `Coups ${pct(v)} plus rapides` },
   reach: { attr: 'ares', tier: 0, lane: 1, name: 'Allonge', per: 0.1, ranks: 2, requires: [],
     text: (v) => `+${pct(v)} de portée des coups` },
-  blade: { attr: 'ares', tier: 1, lane: 0, name: 'Lame trempée', per: 1, ranks: 1, requires: ['swift'],
-    text: (v) => `+${v} dégât par coup` },
+  // En pourcentage : les dégâts de base valent 1, un "+1" les doublerait d'un coup
+  blade: { attr: 'ares', tier: 1, lane: 0, name: 'Lame trempée', per: 0.25, ranks: 2, requires: ['swift'],
+    text: (v) => `+${pct(v)} de dégâts` },
   crit: { attr: 'ares', tier: 1, lane: 1, name: 'Coup du destin', per: 0.1, ranks: 2, requires: ['reach'],
     text: (v) => `${pct(v)} de chance d'infliger des dégâts doublés` },
   cleave: { attr: 'ares', tier: 2, lane: 0, name: 'Fendoir', per: 0.25, ranks: 2, requires: ['blade'],
     text: (v) => `Arc de coup ${pct(v)} plus large` },
-  execute: { attr: 'ares', tier: 2, lane: 1, name: 'Exécution', per: 0.3, ranks: 1, requires: ['crit'],
+  execute: { attr: 'ares', tier: 2, lane: 1, name: 'Exécution', per: 0.2, ranks: 1, requires: ['crit'],
     text: (v) => `Dégâts doublés sur un ennemi sous ${pct(v)} de ses PV` },
-  rage: { attr: 'ares', tier: 3, lane: 0.5, name: "Rage d'Arès", per: 0.3, ranks: 1, requires: ['cleave', 'execute'],
+  rage: { attr: 'ares', tier: 3, lane: 0.5, name: "Rage d'Arès", per: 0.2, ranks: 1, requires: ['cleave', 'execute'],
     text: (v) => `Chaque ennemi vaincu : coups ${pct(v)} plus rapides pendant 3 s` },
 
   // ---------- Déméter : endurance ----------
-  vigor: { attr: 'demeter', tier: 0, lane: 0, name: "Sève d'Asphodèle", per: 2, ranks: 3, requires: [],
+  vigor: { attr: 'demeter', tier: 0, lane: 0, name: "Sève d'Asphodèle", per: 2, ranks: 2, requires: [],
     text: (v) => `+${v} PV maximum` },
-  bark: { attr: 'demeter', tier: 0, lane: 1, name: 'Écorce', per: 0.15, ranks: 2, requires: [],
+  bark: { attr: 'demeter', tier: 0, lane: 1, name: 'Écorce', per: 0.1, ranks: 2, requires: [],
     text: (v) => `Invulnérable ${sec(v)} de plus après un coup reçu` },
-  roots: { attr: 'demeter', tier: 1, lane: 0, name: 'Racines nourricières', per: 2, ranks: 2, requires: ['vigor'],
+  roots: { attr: 'demeter', tier: 1, lane: 0, name: 'Racines nourricières', per: 1, ranks: 1, requires: ['vigor'],
     text: (v) => `Soigne ${v} PV en arrivant à chaque nouvel étage` },
-  elixir: { attr: 'demeter', tier: 1, lane: 1, name: 'Élixir', per: 0.5, ranks: 2, requires: ['bark'],
+  elixir: { attr: 'demeter', tier: 1, lane: 1, name: 'Élixir', per: 0.34, ranks: 1, requires: ['bark'],
     text: (v) => `Potions ${pct(v)} plus efficaces` },
-  harvest: { attr: 'demeter', tier: 2, lane: 0, name: 'Moisson', per: 1, ranks: 2, requires: ['roots'],
-    text: (v) => `Chaque salle purifiée soigne ${v} PV` },
-  surge: { attr: 'demeter', tier: 2, lane: 1, name: 'Sursaut', per: 1, ranks: 1, requires: ['elixir'],
-    text: (v) => `+${v} dégât quand il te reste moins de 30 % de PV` },
-  defiance: { attr: 'demeter', tier: 3, lane: 0.5, name: 'Défi de la Mort', per: 0.25, ranks: 2, requires: ['harvest', 'surge'],
+  harvest: { attr: 'demeter', tier: 2, lane: 0, name: 'Moisson', per: 2, ranks: 1, requires: ['roots'],
+    text: (v) => `Chaque boss vaincu : +${v} PV maximum (et soigne ${v} PV)` },
+  surge: { attr: 'demeter', tier: 2, lane: 1, name: 'Sursaut', per: 0.5, ranks: 1, requires: ['elixir'],
+    text: (v) => `+${pct(v)} de dégâts quand il te reste moins de 30 % de PV` },
+  defiance: { attr: 'demeter', tier: 3, lane: 0.5, name: 'Défi de la Mort', per: 0.2, ranks: 1, requires: ['harvest', 'surge'],
     text: (v) => `Une fois par partie, tu te relèves avec ${pct(v)} de tes PV` },
 
   // ---------- Hermès : ruse ----------
@@ -144,6 +148,16 @@ export function cleanAttrs(raw) {
   return out;
 }
 
+// Prix d'un rang de talent, en points
+export function talentCost(id) {
+  return TIER_COSTS[TALENTS[id].tier];
+}
+
+// Points dépensés dans les talents
+export function pointsSpent(meta) {
+  return TALENT_IDS.reduce((s, k) => s + rankOf(meta, k) * talentCost(k), 0);
+}
+
 // Points de talent gagnés : un par niveau d'attribut au-delà du premier
 export function talentPoints(attrs) {
   return ATTR_IDS.reduce((sum, id) => sum + (attrs[id] || 1) - 1, 0);
@@ -156,8 +170,7 @@ export function talentBlocker(meta, id) {
   if (rankOf(meta, id) >= t.ranks) return 'maximum';
   if (attrLevel(meta, t.attr) < TIER_LEVELS[t.tier]) return 'palier';
   if (t.requires.length && !t.requires.some((r) => rankOf(meta, r) > 0)) return 'verrouillé';
-  const spent = TALENT_IDS.reduce((s, k) => s + rankOf(meta, k), 0);
-  if (spent >= talentPoints(meta.attrs)) return 'pas de point';
+  if (pointsSpent(meta) + talentCost(id) > talentPoints(meta.attrs)) return 'pas de point';
   return '';
 }
 

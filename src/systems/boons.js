@@ -62,12 +62,12 @@ export function playerStats(p) {
   const m = (id) => metaValue(p.meta, id);
   const a = (id) => attrValue(p.meta, id);
   const base = SIM.player;
-  // Sursaut : +1 dégât quand la vie est basse
+  // Sursaut : dégâts accrus quand la vie est basse
   const low = p.hp <= p.maxHp * 0.3 ? m('surge') : 0;
   // Rage d'Arès : cadence accrue juste après avoir vaincu un ennemi
   const rage = p.rage > 0 ? m('rage') : 0;
   return {
-    damage: base.attack.damage + n('ares') + m('blade') + low,
+    damage: (base.attack.damage + n('ares')) * (1 + m('blade') + low),
     speed: base.speed * (1 + 0.12 * n('hermes') + m('fleet') + a('hermes')),
     attackRange: base.attack.range * (1 + 0.2 * n('artemis') + m('reach')),
     attackArc: base.attack.arc * (1 + m('cleave')),

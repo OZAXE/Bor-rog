@@ -295,6 +295,8 @@ body {
   text-align: center;
   background: radial-gradient(ellipse at center, rgba(10, 40, 30, 0.85), rgba(5, 8, 10, 0.95));
   overflow-y: auto;
+  /* "safe" : si le contenu dépasse, il reste accessible en haut au lieu d'être coupé */
+  justify-content: safe center;
 }
 
 #charon.hidden {
@@ -1033,4 +1035,20 @@ body {
 
 #threshold .transfer button[hidden] {
   display: none;
+}
+
+/* Écran bas (téléphone en paysage) : 4 bienfaits tiennent sur une ligne */
+@media (max-height: 500px) {
+  #charon {
+    gap: 6px;
+  }
+  #charon h2 {
+    font-size: 24px;
+  }
+  .boon-card {
+    width: clamp(130px, 22vw, 190px);
+    min-height: 0;
+    padding: 10px 8px;
+    gap: 4px;
+  }
 }

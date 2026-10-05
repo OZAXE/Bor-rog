@@ -179,6 +179,13 @@ export function removeDeadEnemies(state) {
     state.events.push({ type: 'bossDefeated', id: deadBoss.id, bossType: deadBoss.type, x: deadBoss.x, z: deadBoss.z });
     dropBossReward(state, deadBoss);
     state.shadows += sh.bosses[deadBoss.type] || 0;
+    // Moisson (talent) : chaque boss vaincu rend le héros plus robuste
+    const grow = metaValue(p.meta, 'harvest');
+    if (grow) {
+      p.maxHp += grow;
+      p.hp += grow;
+      state.events.push({ type: 'heal', amount: grow, x: p.x, z: p.z });
+    }
     // Thanatos vaincu : c'est la victoire de la partie
     if (deadBoss.type === 'thanatos') {
       state.status = 'victory';

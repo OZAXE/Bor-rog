@@ -3,7 +3,7 @@
 // on dépense ses points dans l'arbre de chaque attribut. Un onglet par attribut,
 // un arbre dessiné (nœuds + liens). Les règles sont dans src/meta/ (tree.js, profile.js).
 
-import { ATTRS, ATTR_IDS, ATTR_MAX, TALENTS, TALENT_IDS, TIER_LEVELS, attrLevel, rankOf, talentBlocker } from '../meta/tree.js';
+import { ATTRS, ATTR_IDS, ATTR_MAX, TALENTS, TALENT_IDS, TIER_LEVELS, attrLevel, rankOf, talentBlocker, talentCost } from '../meta/tree.js';
 import { buyLevel, levelCost, levelBlocker, learn, freePoints, spentPoints, resetTalents, investedShadows } from '../meta/profile.js';
 import { encodeProfile, decodeProfile } from '../meta/transfer.js';
 
@@ -159,8 +159,8 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
         if (why === 'palier') foot = `${a.name} niveau ${need} requis`;
         else if (why === 'verrouillé') foot = `Requiert ${t.requires.map((q) => TALENTS[q].name).join(' ou ')}`;
         else if (why === 'maximum') foot = 'Complet';
-        else if (why === 'pas de point') foot = 'Aucun point libre';
-        else foot = '1 point';
+        else if (why === 'pas de point') foot = `${talentCost(id)} point${talentCost(id) > 1 ? 's' : ''} requis`;
+        else foot = `${talentCost(id)} point${talentCost(id) > 1 ? 's' : ''}`;
         btn.innerHTML =
           `<b>${t.name}</b><span>${t.text(t.per * shown)}</span>` +
           `<i>${'◆'.repeat(r)}${'◇'.repeat(t.ranks - r)}</i><small>${foot}</small>`;

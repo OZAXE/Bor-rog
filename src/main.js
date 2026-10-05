@@ -255,7 +255,8 @@ let pendingAction = null;
 let charonKey = '';
 const charon = $('charon');
 function updateCharon() {
-  const open = state.status === 'choosing';
+  // Seulement en cours de partie (avec le Pacte, l'état démarre en choix dès sa création)
+  const open = state.status === 'choosing' && started && !threshold.isOpen();
   charon.classList.toggle('hidden', !open);
   if (!open) {
     charonKey = '';

@@ -21,6 +21,7 @@ import {
   cleanMeta,
   talentPoints,
   talentBlocker,
+  talentCost,
 } from '../src/meta/tree.js';
 import {
   newProfile,
@@ -123,12 +124,28 @@ test('arbres : talents bien formés, parents du même attribut et d\'un palier i
   }
 });
 
-test('builds : moins de points que de rangs, il faut choisir', () => {
+test("builds : un arbre complet et le bas d'un deuxième, il faut choisir", () => {
   const points = talentPoints(Object.fromEntries(ATTR_IDS.map((a) => [a, ATTR_MAX])));
-  const ranks = TALENT_IDS.reduce((s, id) => s + TALENTS[id].ranks, 0);
   assert.equal(points, ATTR_IDS.length * (ATTR_MAX - 1));
-  assert.ok(ranks > points * 1.2, `${ranks} rangs pour ${points} points : pas assez de choix`);
-  assert.ok(ranks < points * 1.8, `${ranks} rangs pour ${points} points : trop frustrant`);
+  const treeCost = (a) => TALENT_IDS.filter((id) => TALENTS[id].attr === a).reduce((s, id) => s + TALENTS[id].ranks * talentCost(id), 0);
+  const costs = ATTR_IDS.map(treeCost).sort((x, y) => x - y);
+  assert.ok(costs[3] <= points, `l'arbre le plus cher (${costs[3]}) doit pouvoir être complété`);
+  assert.ok(costs[0] + costs[1] > points, 'deux arbres complets ne doivent pas tenir');
+  assert.ok(costs.reduce((x, y) => x + y, 0) > points * 2.5, 'pas assez de choix');
+});
+
+test("talents chers en haut de l'arbre : 1, 2, 3 puis 4 points par rang", () => {
+  const p = newProfile();
+  p.attrs = { ares: 10, demeter: 2, hermes: 1, charon: 1 }; // 10 points
+  assert.ok(learn(p, 'swift'));
+  assert.equal(freePoints(p), 9);
+  assert.ok(learn(p, 'blade'));
+  assert.equal(freePoints(p), 7);
+  assert.ok(learn(p, 'cleave'));
+  assert.equal(freePoints(p), 4);
+  assert.ok(learn(p, 'rage'));
+  assert.equal(freePoints(p), 0);
+  assert.equal(talentBlocker(p, 'reach'), 'pas de point');
 });
 
 test('nettoyage : palier non atteint, parent manquant, points en trop ou valeurs absurdes sont ignorés', () => {
@@ -176,17 +193,18 @@ test('talents : palier, parent et points requis ; remise à zéro gratuite qui g
   buyLevel(p, 'ares'); // niveau 3 : 2 points, palier 1 seulement
   assert.ok(learn(p, 'swift'));
   assert.equal(talentBlocker(p, 'blade'), 'palier');
-  buyLevel(p, 'ares'); // niveau 4 : palier 2 ouvert
+  buyLevel(p, 'ares'); // niveau 4 : palier 2 ouvert (2 points libres)
   assert.equal(talentBlocker(p, 'crit'), 'verrouillé', 'Coup du destin exige Allonge');
-  assert.ok(learn(p, 'blade'));
   assert.ok(learn(p, 'reach'));
-  assert.equal(freePoints(p), 0);
-  assert.equal(talentBlocker(p, 'crit'), 'pas de point');
-  assert.equal(talentBlocker(p, 'blade'), 'maximum');
+  assert.equal(talentBlocker(p, 'crit'), 'pas de point', 'un talent du palier 2 coûte 2 points');
+  assert.equal(freePoints(p), 1);
   resetTalents(p);
   assert.deepEqual(p.talents, {});
   assert.equal(p.attrs.ares, 4);
   assert.equal(freePoints(p), 3);
+  assert.ok(learn(p, 'swift'));
+  assert.ok(learn(p, 'blade'));
+  assert.equal(freePoints(p), 0);
 });
 
 test('fin de partie : Ombres encaissées (Dîme et attribut Charon compris), statistiques à jour', () => {
@@ -254,7 +272,7 @@ test("sans amélioration, une partie est identique à celle d'avant (aucun tirag
 });
 
 test('même graine + mêmes améliorations = même partie (critiques, Danse des lames, renvoi…)', () => {
-  const meta = build({ crit: 2, execute: 1, rage: 1, bladeDance: 1, reflect: 1, defiance: 2, momentum: 2 });
+  const meta = build({ crit: 2, execute: 1, bladeDance: 1, defiance: 1, momentum: 1 });
   const intents = scriptedIntents(2500, 7);
   const a = createGameState('rejeu-meta', { meta });
   const b = createGameState('rejeu-meta', { meta });
@@ -273,7 +291,7 @@ test('attributs : cadence (Arès), PV (Déméter), vitesse (Hermès)', () => {
   const sl = playerStats(low.player);
   const sh = playerStats(high.player);
   assert.ok(Math.abs(sh.attackCooldown / sl.attackCooldown - 0.82) < 1e-9);
-  assert.equal(high.player.maxHp, low.player.maxHp + 4);
+  assert.equal(high.player.maxHp, low.player.maxHp + 3);
   assert.ok(Math.abs(sh.speed / sl.speed - 1.135) < 1e-9);
 });
 
@@ -311,8 +329,9 @@ test('Allonge et Fendoir : portée et arc de coup plus grands', () => {
   assert.equal(side(build({ cleave: 2 })), true);
 });
 
-test('Lame trempée : +1 dégât', () => {
-  assert.equal(hitDamage(arena(build({ blade: 1 }))), hitDamage(arena(bare())) + 1);
+test('Lame trempée : dégâts augmentés en pourcentage', () => {
+  const base = hitDamage(arena(bare()));
+  assert.equal(hitDamage(arena(build({ blade: 2 }))), base * (1 + 2 * TALENTS.blade.per));
 });
 
 test('Coup du destin : environ 20 % de coups doublés au rang 2, et aucun tirage sans', () => {
@@ -343,10 +362,11 @@ test('Coup du destin : environ 20 % de coups doublés au rang 2, et aucun tirage
   assert.ok(r > 0.15 && r < 0.25, `taux de critiques ${r}`);
 });
 
-test('Exécution : dégâts doublés sur un ennemi sous 30 % de ses PV', () => {
-  const base = hitDamage(arena(bare()), { hp: 20 });
+test('Exécution : dégâts doublés sur un ennemi presque vaincu', () => {
+  const low = Math.floor(100 * TALENTS.execute.per) - 1;
+  const base = hitDamage(arena(bare()), { hp: low });
   assert.equal(hitDamage(arena(build({ execute: 1 })), { hp: 50 }), base);
-  assert.equal(hitDamage(arena(build({ execute: 1 })), { hp: 20 }), base * 2);
+  assert.equal(hitDamage(arena(build({ execute: 1 })), { hp: low }), base * 2);
 });
 
 test("Rage d'Arès : coups plus rapides pendant 3 s après avoir vaincu un ennemi", () => {
@@ -354,7 +374,7 @@ test("Rage d'Arès : coups plus rapides pendant 3 s après avoir vaincu un ennem
   const normal = playerStats(s.player).attackCooldown;
   addEnemy(s, 'shade', 11.5, 12.6, { hp: 1 });
   stepGame(s, { ...SOUTH, attack: true });
-  assert.ok(playerStats(s.player).attackCooldown < normal * 0.75);
+  assert.ok(Math.abs(playerStats(s.player).attackCooldown - normal * (1 - TALENTS.rage.per)) < 1e-9);
   run(s, ticks(3) + 1);
   assert.equal(playerStats(s.player).attackCooldown, normal);
 });
@@ -362,8 +382,8 @@ test("Rage d'Arès : coups plus rapides pendant 3 s après avoir vaincu un ennem
 // ---------- Déméter ----------
 
 test("Sève d'Asphodèle et Bourse du passeur : PV et oboles de départ", () => {
-  const s = createGameState('depart', { meta: build({ vigor: 3, purse: 2 }, { demeter: 4 }) });
-  assert.equal(s.player.maxHp, SIM.player.maxHp + 6 + 1);
+  const s = createGameState('depart', { meta: build({ vigor: 2, purse: 2 }, { demeter: 4 }) });
+  assert.equal(s.player.maxHp, SIM.player.maxHp + 2 * TALENTS.vigor.per + 1);
   assert.equal(s.player.hp, s.player.maxHp);
   assert.equal(s.gold, 30);
 });
@@ -374,7 +394,7 @@ test('Écorce : invulnérabilité plus longue après un coup reçu', () => {
     hurtPlayer(s, 1, 0, 0);
     return s.player.invuln;
   };
-  assert.equal(inv(build({ bark: 2 })), inv(bare()) + ticks(0.3));
+  assert.equal(inv(build({ bark: 2 })), inv(bare()) + ticks(2 * TALENTS.bark.per));
 });
 
 test('Élixir : potions plus efficaces', () => {
@@ -386,32 +406,32 @@ test('Élixir : potions plus efficaces', () => {
     return s.player.hp - 1;
   };
   assert.equal(heal(bare()), SIM.loot.potionHeal);
-  assert.equal(heal(build({ elixir: 2 })), SIM.loot.potionHeal * 2);
+  const r = TALENTS.elixir.ranks;
+  assert.equal(heal(build({ elixir: r })), Math.round(SIM.loot.potionHeal * (1 + r * TALENTS.elixir.per)));
+  assert.ok(heal(build({ elixir: r })) > heal(bare()));
 });
 
-test('Moisson : une salle purifiée soigne', () => {
-  const cleared = (meta) => {
+test('Moisson : chaque boss vaincu donne des PV maximum', () => {
+  const after = (meta) => {
     const s = arena(meta);
-    s.dungeon.rooms = [{ id: 0, x: 1, y: 1, w: 20, h: 20, type: 'combat', cleared: false }];
-    s.lock = { roomId: 0, doors: [], enemyIds: [12345] };
-    s.player.hp = 2;
-    stepGame(s, {});
-    assert.equal(s.lock, null);
-    return s.player.hp;
+    s.player.hp = 5;
+    addEnemy(s, 'cerberus', 11.5, 12.9, { hp: 1, alert: true, boss: true });
+    stepGame(s, { ...SOUTH, attack: true });
+    return [s.player.maxHp - arena(meta).player.maxHp, s.player.hp];
   };
-  assert.equal(cleared(bare()), 2);
-  assert.equal(cleared(build({ harvest: 2 })), 4);
+  assert.deepEqual(after(bare()), [0, 5]);
+  assert.deepEqual(after(build({ harvest: 1 })), [TALENTS.harvest.per, 5 + TALENTS.harvest.per]);
 });
 
-test('Sursaut : +1 dégât quand la vie est basse', () => {
+test('Sursaut : dégâts accrus quand la vie est basse', () => {
   const low = arena(build({ surge: 1 }));
   low.player.hp = 2;
   const high = arena(build({ surge: 1 }));
-  assert.equal(hitDamage(low), hitDamage(high) + 1);
+  assert.equal(hitDamage(low), hitDamage(high) * (1 + TALENTS.surge.per));
 });
 
-test('Défi de la Mort : on se relève une fois (25 % puis 50 % des PV), la seconde mort est définitive', () => {
-  for (const rank of [1, 2]) {
+test('Défi de la Mort : on se relève une fois avec une part de ses PV, la seconde mort est définitive', () => {
+  for (let rank = 1; rank <= TALENTS.defiance.ranks; rank++) {
     const s = arena(build({ defiance: rank }));
     hurtPlayer(s, 999, 0, 0);
     assert.equal(s.status, 'playing');
@@ -428,10 +448,11 @@ test('Défi de la Mort : on se relève une fois (25 % puis 50 % des PV), la seco
 });
 
 test('Racines nourricières : soin à chaque nouvel étage', () => {
-  const s = onStairs(build({ roots: 2 }));
+  const r = TALENTS.roots.ranks;
+  const s = onStairs(build({ roots: r }));
   s.player.hp = 3;
   stepGame(s, { choice: 0 });
-  assert.equal(s.player.hp, 3 + 4);
+  assert.equal(s.player.hp, 3 + r * TALENTS.roots.per);
 });
 
 // ---------- Hermès ----------
@@ -571,7 +592,7 @@ test("code d'export : aller-retour exact, espaces et retours à la ligne tolér�
   const p = newProfile();
   p.shadows = 1234;
   p.attrs = { ares: 4, demeter: 7, hermes: 1, charon: 10 };
-  p.talents = cleanMeta({ attrs: p.attrs, talents: { swift: 1, blade: 1, vigor: 3, roots: 1, purse: 3, tithe: 2 } }).talents;
+  p.talents = cleanMeta({ attrs: p.attrs, talents: { swift: 1, blade: 1, vigor: 2, roots: 1, purse: 3, tithe: 2 } }).talents;
   p.stats = { runs: 17, victories: 2, bestFloor: 9, totalShadows: 4321 };
   const code = encodeProfile(p);
   assert.match(code, /^BORROG1-[A-Za-z0-9._]+-[a-z0-9]+$/);

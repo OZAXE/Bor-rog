@@ -14,6 +14,7 @@ import {
   cleanMeta,
   talentBlocker,
   talentPoints,
+  pointsSpent,
 } from './tree.js';
 
 // Version 2 : attributs + talents (la version 1 avait un arbre simple de 13 améliorations)
@@ -64,10 +65,10 @@ export function freePoints(profile) {
 }
 
 export function spentPoints(profile) {
-  return TALENT_IDS.reduce((s, id) => s + rankOf(profile, id), 0);
+  return pointsSpent(profile);
 }
 
-// Prend un rang de talent (1 point). Renvoie true si c'est fait.
+// Prend un rang de talent (1 à 3 points selon le palier). Renvoie true si c'est fait.
 export function learn(profile, id) {
   if (talentBlocker(profile, id)) return false;
   profile.talents[id] = rankOf(profile, id) + 1;
