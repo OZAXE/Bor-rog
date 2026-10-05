@@ -201,6 +201,27 @@ test('deux ennemis serrés contre un mur ne sont jamais poussés dedans', () => 
   assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 0.3, 'les ennemis auraient dû être écartés');
 });
 
+test('un ennemi contourne un pilier au lieu de rester coincé derrière', () => {
+  for (const type of ['shade', 'archer']) {
+    const s = arena();
+    // Pilier entre l'ennemi (au nord) et le héros (au sud), tous alignés
+    s.dungeon.tiles[9 * 22 + 11] = TILE.PILLAR;
+    s.dungeon.tiles[9 * 22 + 10] = TILE.PILLAR;
+    s.dungeon.tiles[9 * 22 + 12] = TILE.PILLAR;
+    s.player.z = 11.5;
+    s.player.invuln = 9999;
+    const e = addEnemy(s, type, 11.5, 6.5, { alert: true, mode: 'chase', shotCooldown: 9999 });
+    run(s, 60 * 4);
+    if (type === 'shade') {
+      assert.ok(Math.hypot(e.x - s.player.x, e.z - s.player.z) < 2, `l'Ombre est restée derrière le pilier (${e.x.toFixed(1)}, ${e.z.toFixed(1)})`);
+    } else {
+      // L'archer doit avoir retrouvé une ligne de tir sur le héros
+      const free = !overlapsSolid(s.dungeon, e, 0.3);
+      assert.ok(free && e.z > 8.2 || Math.abs(e.x - 11.5) > 1.5, `l'archer est resté derrière le pilier (${e.x.toFixed(1)}, ${e.z.toFixed(1)})`);
+    }
+  }
+});
+
 test("un ennemi ne repère pas le héros à travers un mur", () => {
   const s = arena();
   for (let c = 1; c < 21; c++) s.dungeon.tiles[13 * 22 + c] = TILE.WALL; // mur horizontal

@@ -32,6 +32,8 @@ Le propriétaire du dépôt n'est pas développeur de jeux : il juge sur des ré
 
 - Règles et chiffres : `src/systems/simConfig.js` (durées en secondes, converties en pas entiers par `ticks()`).
 - Héros : `src/systems/player.js` (attaque en arc, visée auto sans souris, esquive invulnérable, invulnérabilité après un coup). Ennemis : `src/systems/enemies.js` (machine à états idle / chase / windup / recover ; direction figée au début de la préparation pour que l'attaque soit lisible et esquivable). Flèches : `src/systems/projectiles.js`. Peuplement : `src/dungeon/populate.js` (générateur distinct de celui du plan).
+- Salles verrouillées (`src/systems/rooms.js`) : en entrant (au moins une case au-delà du seuil) dans une salle de combat occupée, des grilles (`TILE.GATE`, solides) ferment ses passages. Ne sont enfermés que les ennemis physiquement dans la salle à la fermeture (garantie anti-blocage, testée). Purifiée quand ils sont tous vaincus.
+- Les ennemis contournent les obstacles : ligne droite si le passage est libre pour leur corps (`hasClearPath`), sinon carte des distances jusqu'au héros.
 - La simulation signale ce qui s'est passé via `state.events` (vidé à chaque pas) ; le rendu en tire les effets (`src/render/effects.js`). Les effets peuvent utiliser Math.random : ils n'influencent jamais la partie.
 - Budget mesuré : ~60 appels de dessin et ~11 000 triangles par image.
 

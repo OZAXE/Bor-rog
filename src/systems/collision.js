@@ -18,8 +18,18 @@ export function moveCircle(dungeon, pos, dx, dz, radius) {
   }
 }
 
-// Repousse le cercle hors des cases pleines qu'il chevauche
+// Repousse le cercle hors des cases pleines qu'il chevauche. Coincé dans un angle,
+// sortir d'une case peut faire mordre sur la voisine : on refait donc quelques
+// passes jusqu'à ne plus rien chevaucher.
 export function pushOut(dungeon, pos, radius) {
+  for (let pass = 0; pass < 4; pass++) {
+    if (!pushOutOnce(dungeon, pos, radius)) return;
+  }
+}
+
+// Une passe ; renvoie vrai si le cercle a été déplacé
+function pushOutOnce(dungeon, pos, radius) {
+  let moved = false;
   const c0 = Math.floor(pos.x - radius);
   const c1 = Math.floor(pos.x + radius);
   const r0 = Math.floor(pos.z - radius);
@@ -34,6 +44,7 @@ export function pushOut(dungeon, pos, radius) {
       const ddz = pos.z - nz;
       const d2 = ddx * ddx + ddz * ddz;
       if (d2 >= radius * radius) continue;
+      moved = true;
       if (d2 > 1e-12) {
         const d = Math.sqrt(d2);
         pos.x += (ddx / d) * (radius - d);
@@ -52,6 +63,7 @@ export function pushOut(dungeon, pos, radius) {
       }
     }
   }
+  return moved;
 }
 
 // Le cercle chevauche-t-il une case pleine ? (utilisé par les tests)

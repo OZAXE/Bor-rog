@@ -107,6 +107,31 @@ body {
   opacity: 0;
 }
 
+#floor-banner.danger {
+  color: #ff5a5a;
+}
+
+#floor-banner.calm {
+  color: var(--spectral);
+}
+
+#lock-info {
+  position: absolute;
+  top: calc(64px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: #ff7a7a;
+  text-shadow: 0 1px 3px #000;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+#lock-info.on {
+  opacity: 1;
+}
+
 #floor-banner.show {
   animation: banner 2.4s ease-out forwards;
 }
