@@ -1,6 +1,6 @@
 # Consignes du projet
 
-Roguelike dans les enfers grecs, 3D isométrique inspirée de Hades, action en temps réel (Vite + Three.js, JavaScript sans TypeScript), publié sur GitHub Pages : https://ozaxe.github.io/Bor-rog/
+Roguelite dans les enfers grecs, 3D isométrique inspirée de Hades, action en temps réel (Vite + Three.js, JavaScript sans TypeScript), publié sur GitHub Pages : https://ozaxe.github.io/Bor-rog/
 
 Le propriétaire du dépôt n'est pas développeur de jeux : il juge sur des résultats testés et visibles. Explications en français, tutoiement, pas de tiret long.
 
@@ -36,6 +36,8 @@ Le propriétaire du dépôt n'est pas développeur de jeux : il juge sur des ré
 - Les ennemis contournent les obstacles : ligne droite si le passage est libre pour leur corps (`hasClearPath`), sinon carte des distances jusqu'au héros.
 - Butin (`src/systems/loot.js`, étape 4) : oboles (attirées vers le héros) et potions lâchées par les ennemis, récompense au centre d'une salle purifiée, coffre dans chaque salle au trésor. Tirages via `state.rng`.
 - Bienfaits (`src/systems/boons.js`) : l'état ne stocke que leur nombre (`player.boons`) ; `playerStats()` calcule les caractéristiques effectives. L'escalier ouvre l'écran de Charon (`src/systems/descent.js`, statut `choosing`, donjon en pause) : 1 bienfait parmi 3, soin et relance payants. Les choix passent par l'intention (`choice`, `shop`), jamais par une modification directe de l'état depuis l'interface.
+- Difficulté (`src/systems/difficulty.js`, étape 5a) : par étage, PV et vitesse multipliés, +1 dégât tous les 4 étages, préparations raccourcies (plancher 60 %), élites (aura dorée) plus fréquentes. Les valeurs effectives sont calculées à la création de l'ennemi et rangées dans `e.stats` ; l'IA lit `e.stats`. Furie à partir de l'étage 3 (charge annoncée en ligne droite). Calibrage au bot : médiane de mort à l'étage 5 sans méta-progression.
+- Feuille de route validée : 5b = 3 zones de 3 étages (Tartare, Asphodèle, Élysée) avec boss et victoire ; 6 = roguelite (monnaie permanente, améliorations en arbre, sauvegarde navigateur + code d'export) ; ensuite classes (guerrier, chasseresse, mystique…) avec arbres de compétences.
 - La simulation signale ce qui s'est passé via `state.events` (vidé à chaque pas) ; le rendu en tire les effets (`src/render/effects.js`). Les effets peuvent utiliser Math.random : ils n'influencent jamais la partie.
 - Budget mesuré : ~60 appels de dessin et ~11 000 triangles par image.
 

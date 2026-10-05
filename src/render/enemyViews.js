@@ -5,6 +5,9 @@ import { SIM } from '../systems/simConfig.js';
 //
 // L'Ombre : spectre violet sombre aux yeux verts, flotte au-dessus du sol.
 // Le Squelette archer : os clairs, arc de bronze.
+// La Furie : silhouette pourpre aux ailes déployées ; annonce sa charge par une
+// large bande rouge au sol.
+// Les élites : plus grands, cerclés d'une aura dorée au sol.
 // Pendant la préparation d'une attaque, un marquage rouge au sol montre la zone
 // du coup (Ombre) ou la trajectoire de la flèche (archer) : c'est ce qui rend le
 // combat lisible et "juste".
@@ -36,6 +39,13 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
     ).rotateX(-Math.PI / 2),
     // Trajectoire de la flèche : bande étroite partant de l'archer vers +z (orientée ensuite)
     aimLine: new THREE.PlaneGeometry(0.08, 7).rotateX(-Math.PI / 2).translate(0, 0, 3.5),
+    // Trajectoire de la charge de la Furie : bande large, de la longueur de la charge
+    chargeLine: new THREE.PlaneGeometry(0.75, SIM.enemies.fury.chargeDistance)
+      .rotateX(-Math.PI / 2)
+      .translate(0, 0, SIM.enemies.fury.chargeDistance / 2),
+    furyBody: new THREE.ConeGeometry(0.26, 0.8, 8).translate(0, 0.45, 0),
+    wing: new THREE.PlaneGeometry(0.55, 0.32).translate(0.3, 0, 0),
+    aura: new THREE.RingGeometry(0.42, 0.56, 24).rotateX(-Math.PI / 2),
     hpBack: new THREE.PlaneGeometry(0.7, 0.09),
     hpFill: new THREE.PlaneGeometry(0.7, 0.09).translate(0.35, 0, 0),
   };
@@ -44,6 +54,13 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
   const warnMat = () =>
     new THREE.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
   const hpBackMat = new THREE.MeshBasicMaterial({ color: 0x1a0a0c, depthTest: false });
+  const auraMat = new THREE.MeshBasicMaterial({
+    color: 0xf2c96b,
+    transparent: true,
+    opacity: 0.7,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
 
   // Ajoute une pièce avec son contour d'encre
   function part(parent, geometry, material, x, y, z, outline = true) {
@@ -79,6 +96,17 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
       part(body, geo.shadeHead, toon(0x2a1a40), 0, 1.0, 0);
       part(body, geo.eye, eyeMat, -0.07, 1.03, 0.16, false);
       part(body, geo.eye, eyeMat, 0.07, 1.03, 0.16, false);
+    } else if (e.type === 'fury') {
+      part(body, geo.furyBody, toon(0x8c1d3c), 0, 0.1, 0);
+      part(body, geo.shadeHead, toon(0x5a1028), 0, 1.0, 0);
+      part(body, geo.eye, eyeMat, -0.07, 1.03, 0.16, false);
+      part(body, geo.eye, eyeMat, 0.07, 1.03, 0.16, false);
+      const wingMat = toon(0x3a0a18);
+      wingMat.side = THREE.DoubleSide;
+      const left = part(body, geo.wing, wingMat, 0.12, 0.85, -0.05, false);
+      const right = part(body, geo.wing, wingMat, -0.12, 0.85, -0.05, false);
+      right.rotation.y = Math.PI;
+      body.userData.wings = [left, right];
     } else {
       part(body, geo.boneBody, toon(0xd9d0b8), 0, 0.45, 0);
       part(body, geo.skull, toon(0xe8e0c8), 0, 0.92, 0);
@@ -92,8 +120,18 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
     shadow.position.y = 0.014;
     root.add(shadow);
 
+    // Élite : plus grande, aura dorée au sol, teinte légèrement dorée
+    if (e.elite) {
+      body.scale.setScalar(1.22);
+      const aura = new THREE.Mesh(geo.aura, auraMat);
+      aura.position.y = 0.025;
+      root.add(aura);
+      for (const m of mats) m.userData.base.lerp(new THREE.Color(0xf2c96b), 0.25);
+    }
+
     // Marquage d'attaque (invisible hors préparation)
-    const warn = new THREE.Mesh(e.type === 'shade' ? geo.strike : geo.aimLine, warnMat());
+    const warnGeo = e.type === 'shade' ? geo.strike : e.type === 'fury' ? geo.chargeLine : geo.aimLine;
+    const warn = new THREE.Mesh(warnGeo, warnMat());
     warn.position.y = 0.03;
     root.add(warn);
 
@@ -111,7 +149,7 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
     root.add(hp);
 
     scene.add(root);
-    return { root, body, mats, warn, hp, fill, type: e.type };
+    return { root, body, mats, warn, hp, fill, type: e.type, scale: e.elite ? 1.22 : 1 };
   }
 
   const white = new THREE.Color(0xffffff);
@@ -130,8 +168,15 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
         const pos = positions.get(e.id) || e;
         v.root.position.set(pos.x, 0, pos.z);
         v.body.rotation.y = e.facing;
-        // L'Ombre flotte ; le squelette sautille un peu en marchant
-        v.body.position.y = e.type === 'shade' ? 0.12 + Math.sin(time * 3 + e.id) * 0.05 : 0;
+        // L'Ombre et la Furie flottent ; le squelette reste au sol
+        v.body.position.y = e.type === 'archer' ? 0 : 0.12 + Math.sin(time * 3 + e.id) * 0.05;
+        if (v.body.userData.wings) {
+          // Battement d'ailes, frénétique pendant la charge
+          const speed = e.mode === 'charge' ? 30 : 9;
+          const flap = Math.sin(time * speed + e.id) * 0.5;
+          v.body.userData.wings[0].rotation.y = flap;
+          v.body.userData.wings[1].rotation.y = Math.PI - flap;
+        }
 
         // Clignotement blanc quand il est touché
         const flash = e.hitFlash > 0 ? 0.85 : 0;
@@ -144,11 +189,13 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
           v.warn.visible = true;
           v.warn.material.opacity = 0.15 + 0.5 * k;
           v.warn.rotation.y = Math.atan2(e.aimX, e.aimZ);
-          if (e.type === 'shade') v.body.scale.setScalar(1 + 0.12 * k); // se gonfle avant de frapper
+          if (e.type === 'shade') v.body.scale.setScalar(v.scale * (1 + 0.12 * k)); // se gonfle avant de frapper
         } else {
           v.warn.visible = false;
-          v.body.scale.setScalar(1);
+          v.body.scale.setScalar(v.scale);
         }
+        // Furie étourdie (après sa charge) : elle penche, sonnée
+        v.body.rotation.z = e.type === 'fury' && e.mode === 'recover' ? Math.sin(time * 6) * 0.25 : 0;
 
         v.hp.visible = e.hp < e.maxHp;
         v.fill.scale.x = Math.max(0.001, e.hp / e.maxHp);

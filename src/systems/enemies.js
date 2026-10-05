@@ -4,7 +4,12 @@
 //   chase   : le poursuit (l'Ombre) ou se place à bonne distance (l'archer)
 //   windup  : prépare son coup / son tir. La direction est FIGÉE au début : c'est
 //             ce qui laisse au joueur le temps de lire l'attaque et d'esquiver.
+//   charge  : (Furie) fonce en ligne droite dans la direction annoncée
 //   recover : temps mort après l'attaque, la fenêtre pour riposter
+//
+// Les valeurs qui dépendent de l'étage (PV, vitesse, dégâts, durée de préparation…)
+// sont lues dans e.stats (cf. src/systems/difficulty.js) ; les valeurs fixes du type
+// (portées, rayon…) dans SIM.enemies.
 
 import { SIM, ticks } from './simConfig.js';
 import { moveCircle } from './collision.js';
@@ -43,7 +48,8 @@ export function updateEnemies(state, dt) {
     let mvz = 0;
     if (e.alert && state.status === 'playing') {
       if (e.type === 'shade') ({ mvx, mvz } = shadeBrain(state, e, cfg, dx, dz, dist, ctx));
-      else ({ mvx, mvz } = archerBrain(state, e, cfg, dx, dz, dist, ctx));
+      else if (e.type === 'archer') ({ mvx, mvz } = archerBrain(state, e, cfg, dx, dz, dist, ctx));
+      else ({ mvx, mvz } = furyBrain(state, e, cfg, dx, dz, dist, ctx));
     }
 
     // Recul après un coup reçu, qui s'amortit
@@ -57,8 +63,10 @@ export function updateEnemies(state, dt) {
 
     const pos = { x: e.x, z: e.z };
     moveCircle(state.dungeon, pos, (mvx + e.kvx) * dt, (mvz + e.kvz) * dt, cfg.radius);
+    const moved = Math.hypot(pos.x - e.x, pos.z - e.z);
     e.x = pos.x;
     e.z = pos.z;
+    if (e.mode === 'charge') resolveCharge(state, e, cfg, moved, Math.hypot(mvx, mvz) * dt);
   }
   separate(state);
 }
@@ -70,25 +78,25 @@ function shadeBrain(state, e, cfg, dx, dz, dist, ctx) {
       e.facing = facingOf(dx, dz);
       if (dist <= cfg.attackRange) {
         e.mode = 'windup';
-        e.timer = ticks(cfg.windup);
+        e.timer = ticks(e.stats.windup);
         e.aimX = dx / (dist || 1);
         e.aimZ = dz / (dist || 1);
         state.events.push({ type: 'windup', id: e.id });
         return { mvx: 0, mvz: 0 };
       }
       const dir = approachDir(state, e, cfg, ctx);
-      return { mvx: dir.x * cfg.speed, mvz: dir.z * cfg.speed };
+      return { mvx: dir.x * e.stats.speed, mvz: dir.z * e.stats.speed };
     }
     case 'windup': {
       if (--e.timer > 0) return { mvx: 0, mvz: 0 };
       // Le coup part dans la direction figée au début de la préparation
       e.mode = 'recover';
-      e.timer = ticks(cfg.recover);
+      e.timer = ticks(e.stats.recover);
       e.kvx += e.aimX * cfg.lunge;
       e.kvz += e.aimZ * cfg.lunge;
       state.events.push({ type: 'strike', id: e.id, x: e.x, z: e.z, facing: e.facing });
       if (inArc(e.x, e.z, e.facing, cfg.strikeRange, cfg.strikeArc, p.x, p.z, SIM.player.radius)) {
-        hurtPlayer(state, cfg.damage, e.x, e.z);
+        hurtPlayer(state, e.stats.damage, e.x, e.z);
       }
       return { mvx: 0, mvz: 0 };
     }
@@ -109,7 +117,7 @@ function archerBrain(state, e, cfg, dx, dz, dist, ctx) {
       const sees = hasLineOfSight(state.dungeon, e.x, e.z, p.x, p.z);
       if (sees && e.shotCooldown === 0 && dist <= cfg.preferMax + 1.5) {
         e.mode = 'windup';
-        e.timer = ticks(cfg.windup);
+        e.timer = ticks(e.stats.windup);
         e.aimX = dx / (dist || 1);
         e.aimZ = dz / (dist || 1);
         state.events.push({ type: 'windup', id: e.id });
@@ -122,16 +130,16 @@ function archerBrain(state, e, cfg, dx, dz, dist, ctx) {
       // Ensuite : trop près, il recule ; trop loin, il s'approche ; sinon il reste en place.
       if (!sees || dist > cfg.preferMax) {
         const dir = approachDir(state, e, cfg, ctx);
-        return { mvx: dir.x * cfg.speed, mvz: dir.z * cfg.speed };
+        return { mvx: dir.x * e.stats.speed, mvz: dir.z * e.stats.speed };
       }
-      if (dist < cfg.preferMin) return { mvx: -ux * cfg.speed, mvz: -uz * cfg.speed };
+      if (dist < cfg.preferMin) return { mvx: -ux * e.stats.speed, mvz: -uz * e.stats.speed };
       return { mvx: 0, mvz: 0 };
     }
     case 'windup': {
       if (--e.timer > 0) return { mvx: 0, mvz: 0 };
       e.mode = 'recover';
-      e.timer = ticks(cfg.recover);
-      e.shotCooldown = ticks(cfg.cooldown);
+      e.timer = ticks(e.stats.recover);
+      e.shotCooldown = ticks(e.stats.cooldown);
       // La flèche part juste devant l'archer, dans la direction figée
       const start = cfg.radius + 0.15;
       state.projectiles.push({
@@ -141,7 +149,7 @@ function archerBrain(state, e, cfg, dx, dz, dist, ctx) {
         vx: e.aimX * cfg.arrowSpeed,
         vz: e.aimZ * cfg.arrowSpeed,
         travelLeft: cfg.arrowRange,
-        damage: cfg.arrowDamage,
+        damage: e.stats.arrowDamage,
       });
       state.events.push({ type: 'shoot', id: e.id, x: e.x, z: e.z });
       return { mvx: 0, mvz: 0 };
@@ -152,6 +160,59 @@ function archerBrain(state, e, cfg, dx, dz, dist, ctx) {
     default:
       e.mode = 'chase';
       return { mvx: 0, mvz: 0 };
+  }
+}
+
+function furyBrain(state, e, cfg, dx, dz, dist, ctx) {
+  switch (e.mode) {
+    case 'chase': {
+      e.facing = facingOf(dx, dz);
+      // Elle n'annonce sa charge que si la voie est libre jusqu'au héros
+      if (dist <= cfg.chargeRange && hasClearPath(state.dungeon, e.x, e.z, state.player.x, state.player.z, cfg.radius)) {
+        e.mode = 'windup';
+        e.timer = ticks(e.stats.windup);
+        e.aimX = dx / (dist || 1);
+        e.aimZ = dz / (dist || 1);
+        state.events.push({ type: 'windup', id: e.id });
+        return { mvx: 0, mvz: 0 };
+      }
+      const dir = approachDir(state, e, cfg, ctx);
+      return { mvx: dir.x * e.stats.speed, mvz: dir.z * e.stats.speed };
+    }
+    case 'windup':
+      if (--e.timer > 0) return { mvx: 0, mvz: 0 };
+      e.mode = 'charge';
+      e.timer = Math.ceil((cfg.chargeDistance / e.stats.chargeSpeed) * SIM.tickRate);
+      e.chargeHit = false;
+      state.events.push({ type: 'charge', id: e.id, x: e.x, z: e.z });
+      return { mvx: e.aimX * e.stats.chargeSpeed, mvz: e.aimZ * e.stats.chargeSpeed };
+    case 'charge':
+      if (--e.timer <= 0) {
+        e.mode = 'recover';
+        e.timer = ticks(e.stats.recover);
+        return { mvx: 0, mvz: 0 };
+      }
+      return { mvx: e.aimX * e.stats.chargeSpeed, mvz: e.aimZ * e.stats.chargeSpeed };
+    case 'recover':
+      if (--e.timer <= 0) e.mode = 'chase';
+      return { mvx: 0, mvz: 0 };
+    default:
+      e.mode = 'chase';
+      return { mvx: 0, mvz: 0 };
+  }
+}
+
+// Pendant la charge : touche le héros au contact (une fois par charge, sauf s'il
+// esquive à travers), et s'écrase si un mur l'arrête (étourdie plus longtemps)
+function resolveCharge(state, e, cfg, moved, wanted) {
+  const p = state.player;
+  if (!e.chargeHit && Math.hypot(p.x - e.x, p.z - e.z) < cfg.radius + SIM.player.radius + 0.1) {
+    if (hurtPlayer(state, e.stats.damage, e.x, e.z)) e.chargeHit = true;
+  }
+  if (wanted > 0 && moved < wanted * 0.5) {
+    e.mode = 'recover';
+    e.timer = ticks(cfg.wallStun);
+    state.events.push({ type: 'crash', id: e.id, x: e.x, z: e.z });
   }
 }
 

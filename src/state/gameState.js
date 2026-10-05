@@ -6,8 +6,9 @@ import { createRng } from '../core/rng.js';
 import { generateFloor } from '../dungeon/generate.js';
 import { populateFloor } from '../dungeon/populate.js';
 import { SIM, ticks } from '../systems/simConfig.js';
+import { enemyStats } from '../systems/difficulty.js';
 
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 // options.enemies : false pour un donjon vide (tests d'exploration)
 // options.dungeonParams : réglages du générateur d'étages (tests)
@@ -88,8 +89,9 @@ export function enterFloor(state, floorIndex) {
   }
 }
 
-export function createEnemy(state, { type, x, z, roomId = -1, firstShotDelay = 0 }) {
-  const cfg = SIM.enemies[type];
+export function createEnemy(state, { type, x, z, roomId = -1, firstShotDelay = 0, elite = false }) {
+  // Caractéristiques selon l'étage et le statut d'élite (cf. src/systems/difficulty.js)
+  const stats = enemyStats(type, state.floorIndex, elite);
   return {
     id: state.nextId++,
     type,
@@ -98,8 +100,10 @@ export function createEnemy(state, { type, x, z, roomId = -1, firstShotDelay = 0
     kvx: 0, // vitesse de recul (après un coup reçu)
     kvz: 0,
     facing: 0,
-    hp: cfg.hp,
-    maxHp: cfg.hp,
+    elite,
+    stats,
+    hp: stats.hp,
+    maxHp: stats.hp,
     roomId,
     alert: false, // a repéré le héros (ne l'oublie plus ensuite)
     mode: 'idle', // 'idle' | 'chase' | 'windup' | 'recover'
