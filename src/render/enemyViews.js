@@ -75,6 +75,41 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
         SIM.bosses.cerberus.breath.coneArc,
       ).rotateX(-Math.PI / 2),
     howlRing: new THREE.RingGeometry(1.0, 1.25, 32).rotateX(-Math.PI / 2),
+    // ---------- Hydre ----------
+    coil: new THREE.TorusGeometry(0.85, 0.32, 8, 18).rotateX(Math.PI / 2),
+    lavaPool: new THREE.CircleGeometry(1.9, 28).rotateX(-Math.PI / 2),
+    neck: new THREE.CylinderGeometry(0.16, 0.24, 1.1, 8).translate(0, 0.55, 0),
+    serpentHead: new THREE.BoxGeometry(0.34, 0.24, 0.5),
+    jaw: new THREE.BoxGeometry(0.3, 0.08, 0.42),
+    spitLine: (offset) =>
+      new THREE.PlaneGeometry(0.1, 6)
+        .translate(0, 3, 0)
+        .rotateX(Math.PI / 2) // +y du plan -> +z du monde : la ligne part DEVANT la tête
+        .rotateY(offset),
+    headBite: new THREE.RingGeometry(
+      0.3,
+      SIM.bosses.hydra.bite.range,
+      14,
+      1,
+      -Math.PI / 2 - SIM.bosses.hydra.bite.arc / 2,
+      SIM.bosses.hydra.bite.arc,
+    ).rotateX(-Math.PI / 2),
+    // ---------- Thanatos ----------
+    robe: new THREE.ConeGeometry(0.42, 1.4, 10, 1, true).translate(0, 0.7, 0),
+    hood: new THREE.SphereGeometry(0.22, 10, 8),
+    scytheHandle: new THREE.CylinderGeometry(0.03, 0.03, 1.8, 6),
+    scytheBlade: new THREE.TorusGeometry(0.45, 0.04, 4, 12, Math.PI * 0.75),
+    reapDisc: new THREE.CircleGeometry(SIM.bosses.thanatos.reap.radius, 36).rotateX(-Math.PI / 2),
+    reapEdge: new THREE.RingGeometry(SIM.bosses.thanatos.reap.radius - 0.08, SIM.bosses.thanatos.reap.radius, 40).rotateX(-Math.PI / 2),
+    slash: new THREE.RingGeometry(
+      0.3,
+      SIM.bosses.thanatos.blink.slashRange,
+      16,
+      1,
+      -Math.PI / 2 - SIM.bosses.thanatos.blink.slashArc / 2,
+      SIM.bosses.thanatos.blink.slashArc,
+    ).rotateX(-Math.PI / 2),
+    blinkMark: new THREE.RingGeometry(0.35, 0.55, 20).rotateX(-Math.PI / 2),
     hpBack: new THREE.PlaneGeometry(0.7, 0.09),
     hpFill: new THREE.PlaneGeometry(0.7, 0.09).translate(0.35, 0, 0),
   };
@@ -83,6 +118,9 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
   const warnMat = () =>
     new THREE.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
   const hpBackMat = new THREE.MeshBasicMaterial({ color: 0x1a0a0c, depthTest: false });
+  const lavaMat = new THREE.MeshBasicMaterial({ color: 0xff6a1a, transparent: true, opacity: 0.75 });
+  const lavaEyeMat = new THREE.MeshBasicMaterial({ color: 0xffb03a });
+  const whiteEyeMat = new THREE.MeshBasicMaterial({ color: 0xe8f0ff });
   const auraMat = new THREE.MeshBasicMaterial({
     color: 0xf2c96b,
     transparent: true,
@@ -135,6 +173,85 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
     body.userData.heads = heads;
   }
 
+  // Hydre : corps lové sur un lac de lave
+  function buildHydra(body, toon) {
+    const scales = toon(0x4a1f1a);
+    const pool = new THREE.Mesh(geo.lavaPool, lavaMat);
+    pool.position.y = 0.02;
+    body.add(pool);
+    for (let k = 0; k < 3; k++) {
+      const c = part(body, geo.coil, scales, 0, 0.3 + k * 0.42, 0, k === 2);
+      c.scale.setScalar(1 - k * 0.22);
+    }
+    part(body, geo.dogBelly, scales, 0, 1.5, 0, true).scale.set(0.8, 0.7, 0.8);
+  }
+
+  // Tête d'Hydre : long cou dressé, tête de serpent, mâchoire
+  function buildHydraHead(body, toon) {
+    const scales = toon(0x5a2a20);
+    part(body, geo.neck, scales, 0, 0, 0);
+    const head = part(body, geo.serpentHead, scales, 0, 1.15, 0.12);
+    part(head, geo.jaw, toon(0x7a3a28), 0, -0.14, 0.04, false);
+    part(head, geo.eye, lavaEyeMat, -0.1, 0.08, 0.18, false);
+    part(head, geo.eye, lavaEyeMat, 0.1, 0.08, 0.18, false);
+  }
+
+  // Thanatos : grande silhouette en robe noire, capuche, ailes sombres, faux
+  function buildThanatos(body, toon) {
+    const robeMat = toon(0x1c1a24);
+    robeMat.side = THREE.DoubleSide;
+    part(body, geo.robe, robeMat, 0, 0, 0);
+    part(body, geo.hood, toon(0x2a2632), 0, 1.5, 0);
+    part(body, geo.eye, whiteEyeMat, -0.07, 1.5, 0.17, false);
+    part(body, geo.eye, whiteEyeMat, 0.07, 1.5, 0.17, false);
+    const wingMat = toon(0x15131c);
+    wingMat.side = THREE.DoubleSide;
+    const left = part(body, geo.wing, wingMat, 0.15, 1.2, -0.12, false);
+    const right = part(body, geo.wing, wingMat, -0.15, 1.2, -0.12, false);
+    left.scale.setScalar(1.6);
+    right.scale.setScalar(1.6);
+    right.rotation.y = Math.PI;
+    body.userData.wings = [left, right];
+    const scythe = new THREE.Group();
+    scythe.position.set(0.45, 0.9, 0.15);
+    scythe.add(new THREE.Mesh(geo.scytheHandle, toon(0x3a2c1c)));
+    const blade = new THREE.Mesh(geo.scytheBlade, toon(0xc8ccd4));
+    blade.position.y = 0.85;
+    blade.rotation.z = Math.PI * 0.6;
+    scythe.add(blade);
+    body.add(scythe);
+  }
+
+  // Marquages d'attaque par type (un par attaque, un seul visible à la fois)
+  function makeWarns(type) {
+    const reapMats = () => {
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(geo.reapDisc, warnMat()), new THREE.Mesh(geo.reapEdge, warnMat()));
+      return g;
+    };
+    if (type === 'cerberus') {
+      const breath = new THREE.Group();
+      for (const a of SIM.bosses.cerberus.breath.angles) breath.add(new THREE.Mesh(geo.breathCone(a), warnMat()));
+      const howlMat = warnMat();
+      howlMat.color.set(0x2fff86);
+      return {
+        charge: new THREE.Mesh(geo.bossCharge, warnMat()),
+        bite: new THREE.Mesh(geo.bossBite, warnMat()),
+        breath,
+        howl: new THREE.Mesh(geo.howlRing, howlMat),
+      };
+    }
+    if (type === 'hydraHead') {
+      const spit = new THREE.Group();
+      const sp = SIM.bosses.hydra.spit;
+      for (let k = 0; k < sp.count; k++) spit.add(new THREE.Mesh(geo.spitLine((k - (sp.count - 1) / 2) * sp.spread), warnMat()));
+      return { spit, bite: new THREE.Mesh(geo.headBite, warnMat()) };
+    }
+    if (type === 'thanatos') return { reap: reapMats(), slash: new THREE.Mesh(geo.slash, warnMat()) };
+    if (type === 'thanatosDouble') return { reap: reapMats() };
+    return {}; // le corps de l'Hydre n'attaque pas lui-même
+  }
+
   function createView(e) {
     const root = new THREE.Group();
     const body = new THREE.Group(); // tourne avec l'ennemi
@@ -156,6 +273,12 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
       part(body, geo.eye, eyeMat, 0.07, 1.03, 0.16, false);
     } else if (e.type === 'cerberus') {
       buildCerberus(body, toon);
+    } else if (e.type === 'hydra') {
+      buildHydra(body, toon);
+    } else if (e.type === 'hydraHead') {
+      buildHydraHead(body, toon);
+    } else if (e.type === 'thanatos' || e.type === 'thanatosDouble') {
+      buildThanatos(body, toon);
     } else if (e.type === 'fury') {
       part(body, geo.furyBody, toon(0x8c1d3c), 0, 0.1, 0);
       part(body, geo.shadeHead, toon(0x5a1028), 0, 1.0, 0);
@@ -178,7 +301,18 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
     const shadow = new THREE.Mesh(geo.shadow, shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.014;
-    root.add(shadow);
+    // Indice pour démasquer les doubles : seul le vrai Thanatos projette une ombre
+    if (e.type !== 'thanatosDouble' && e.type !== 'hydra') root.add(shadow);
+
+    // Thanatos : marque au sol là où il va réapparaître (indépendante de sa position)
+    let blinkMark = null;
+    if (e.type === 'thanatos') {
+      const m = warnMat();
+      m.color.set(0xb9c8ff);
+      blinkMark = new THREE.Mesh(geo.blinkMark, m);
+      blinkMark.visible = false;
+      scene.add(blinkMark);
+    }
 
     // Élite : plus grande, aura dorée au sol, teinte légèrement dorée
     if (e.elite) {
@@ -192,19 +326,10 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
     // Marquage d'attaque (invisible hors préparation)
     let warn;
     let bossWarns = null;
-    if (e.boss) {
-      // Un boss a plusieurs attaques : un marquage par attaque, un seul visible à la fois
+    if (e.boss || e.part) {
+      // Plusieurs attaques : un marquage par attaque, un seul visible à la fois
       const g = new THREE.Group();
-      const breath = new THREE.Group();
-      for (const a of SIM.bosses.cerberus.breath.angles) breath.add(new THREE.Mesh(geo.breathCone(a), warnMat()));
-      const howlMat = warnMat();
-      howlMat.color.set(0x2fff86);
-      bossWarns = {
-        charge: new THREE.Mesh(geo.bossCharge, warnMat()),
-        bite: new THREE.Mesh(geo.bossBite, warnMat()),
-        breath,
-        howl: new THREE.Mesh(geo.howlRing, howlMat),
-      };
+      bossWarns = makeWarns(e.type);
       for (const m of Object.values(bossWarns)) {
         m.visible = false;
         g.add(m);
@@ -232,7 +357,7 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
 
     scene.add(root);
     if (e.boss) hp.visible = false; // la vie du boss s'affiche en haut de l'écran
-    return { root, body, mats, warn, bossWarns, hp, fill, type: e.type, boss: e.boss, scale: e.elite ? 1.22 : 1 };
+    return { root, body, mats, warn, bossWarns, blinkMark, hp, fill, type: e.type, boss: e.boss, scale: e.elite ? 1.22 : 1 };
   }
 
   const white = new THREE.Color(0xffffff);
@@ -253,7 +378,18 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
         v.root.position.set(pos.x, 0, pos.z);
         v.body.rotation.y = e.facing;
         // L'Ombre et la Furie flottent ; le squelette reste au sol
-        v.body.position.y = e.type === 'archer' || e.boss ? 0 : 0.12 + Math.sin(time * 3 + e.id) * 0.05;
+        const grounded = e.type === 'archer' || e.type === 'cerberus' || e.type === 'hydra' || e.type === 'hydraHead';
+        v.body.position.y = grounded ? 0 : 0.12 + Math.sin(time * 3 + e.id) * 0.05;
+        // Thanatos téléporté : invisible, une marque montre où il va surgir
+        v.body.visible = !e.untargetable;
+        if (v.blinkMark) {
+          v.blinkMark.visible = e.mode === 'vanish';
+          if (v.blinkMark.visible) {
+            v.blinkMark.position.set(e.blinkX, 0.035, e.blinkZ);
+            v.blinkMark.scale.setScalar(1 + Math.sin(time * 12) * 0.12);
+            v.blinkMark.material.opacity = 0.5 + 0.4 * (1 - e.timer / (e.windupTotal || 1));
+          }
+        }
         if (v.body.userData.wings) {
           // Battement d'ailes, frénétique pendant la charge
           const speed = e.mode === 'charge' ? 30 : 9;
@@ -276,6 +412,8 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
               if (o.material && o.material.opacity !== undefined && o.isMesh) o.material.opacity = 0.15 + 0.55 * k;
             });
             if (e.attack === 'howl') v.bossWarns.howl.scale.setScalar(1 + k * 2.5);
+            // Faux de Thanatos : le disque se "remplit" depuis le centre
+            if (e.attack === 'reap') v.bossWarns.reap.children[0].scale.setScalar(Math.max(0.05, k));
           }
           // Sonné (après une charge contre un mur) : il titube
           v.body.rotation.z = e.mode === 'recover' && e.stunned ? Math.sin(time * 7) * 0.12 : 0;
@@ -285,7 +423,9 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
             if (e.hitFlash > 0) m.color.lerp(white, 0.6);
             else if (e.invulnerable) m.color.lerp(spectral, 0.35);
           }
-          v.hp.visible = false;
+          // Les têtes d'Hydre ont leur petite barre ; les boss ont la leur en haut de l'écran
+          v.hp.visible = e.type === 'hydraHead' && e.hp < e.maxHp;
+          v.fill.scale.x = Math.max(0.001, e.hp / e.maxHp);
           continue;
         }
 
@@ -317,6 +457,10 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
           if (o.isMesh) o.material.dispose();
         });
         v.fill.material.dispose();
+        if (v.blinkMark) {
+          scene.remove(v.blinkMark);
+          v.blinkMark.material.dispose();
+        }
         views.delete(id);
       }
     },
@@ -328,12 +472,15 @@ export function createProjectileView(scene) {
   const max = 64;
   const mesh = new THREE.InstancedMesh(
     new THREE.BoxGeometry(0.06, 0.06, 0.55),
-    new THREE.MeshBasicMaterial({ color: 0xffd27a }),
+    new THREE.MeshBasicMaterial({ color: 0xffffff }),
     max,
   );
   mesh.count = 0;
   mesh.frustumCulled = false;
+  for (let i = 0; i < max; i++) mesh.setColorAt(i, new THREE.Color(0xffffff));
   scene.add(mesh);
+  const arrowColor = new THREE.Color(0xffd27a);
+  const venomColor = new THREE.Color(0xff7a2f);
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const p = new THREE.Vector3();
@@ -348,8 +495,10 @@ export function createProjectileView(scene) {
         q.setFromAxisAngle(up, Math.atan2(a.vx, a.vz));
         p.set(a.x - a.vx * step * lag, 0.75, a.z - a.vz * step * lag);
         mesh.setMatrixAt(i, m.compose(p, q, s));
+        mesh.setColorAt(i, a.kind === 'venom' ? venomColor : arrowColor);
       }
       mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     },
   };
 }

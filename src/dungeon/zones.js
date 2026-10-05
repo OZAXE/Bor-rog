@@ -9,9 +9,8 @@ export const ZONES = [
   { id: 'elysium', name: "L'Élysée", boss: 'thanatos' },
 ];
 
-// Boss déjà jouables (les autres arrivent à l'étape 5b-2 : en attendant, leur
-// étage reste un étage normal)
-export const IMPLEMENTED_BOSSES = new Set(['cerberus']);
+// Boss jouables (un boss absent de cette liste laisserait son étage normal)
+export const IMPLEMENTED_BOSSES = new Set(['cerberus', 'hydra', 'thanatos']);
 
 export function zoneIndexOf(floorIndex) {
   return Math.min(ZONES.length - 1, Math.floor(floorIndex / FLOORS_PER_ZONE));

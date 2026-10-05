@@ -103,6 +103,41 @@ export const SIM = {
       phase2: { at: 0.5, howl: 1.4, adds: 4, chainWindup: 0.6 },
       reward: { obols: [28, 40], potions: 1 },
     },
+
+    // L'Hydre de Lerne : un corps immobile entouré de têtes. Chaque tête tranchée
+    // repousse, sauf si l'on frappe le corps pendant qu'elle est tranchée (moignon
+    // cautérisé). À 50 % : flaques de lave annoncées et une tête de plus.
+    hydra: {
+      name: 'L\'Hydre de Lerne',
+      radius: 1.1,
+      hp: 300,
+      speed: 0,
+      heads: 4,
+      headRing: 2.7, // distance des têtes au corps (m)
+      regrow: 6, // repousse d'une tête tranchée (s)
+      headCooldown: [1.25, 2.0], // pause d'une tête entre deux attaques (s)
+      spit: { windup: 0.7, count: 3, spread: 0.32, speed: 7, damage: 1, range: 11 },
+      bite: { trigger: 3.4, windup: 0.6, range: 3.2, arc: 1.1, damage: 2 },
+      phase2: { at: 0.5, extraHeads: 1, poolEvery: [3.5, 5.0], poolRadius: 1.3, poolWarn: 1.0, poolLife: 2.0, poolDamage: 1 },
+      reward: { obols: [35, 50], potions: 1 },
+    },
+
+    // Thanatos, la Mort (boss final) : faux circulaire, téléportation derrière le
+    // héros, pluie d'âmes ; à 50 % deux doubles illusoires, à 25 % il s'accélère.
+    thanatos: {
+      name: 'Thanatos, la Mort',
+      radius: 0.5,
+      hp: 520,
+      speed: 3.6,
+      pause: [0.35, 0.7],
+      keepDistance: 3.5,
+      reap: { windup: 0.85, radius: 3.0, damage: 3, recover: 0.5 },
+      blink: { vanish: 0.55, behind: 1.6, slashWindup: 0.4, slashRange: 2.1, slashArc: 2.0, damage: 3, recover: 0.4 },
+      rain: { count: 6, spread: 3.2, radius: 1.15, warn: 1.0, damage: 2, recover: 0.6 },
+      phase2: { at: 0.5, doubles: 2, doubleHp: 1, resummon: 10 },
+      phase3: { at: 0.25, speed: 1.3, windup: 0.75 },
+      reward: { obols: [0, 0], potions: 0 },
+    },
   },
 
   // Peuplement des étages
@@ -150,6 +185,9 @@ SIM.loot = {
 for (const [id, b] of Object.entries(SIM.bosses)) {
   SIM.enemies[id] = { radius: b.radius, hp: b.hp, speed: b.speed, aggroRange: 0, windup: 0, recover: 0, boss: true };
 }
+// Parties de boss : têtes de l'Hydre (fixes) et doubles de Thanatos (illusions)
+SIM.enemies.hydraHead = { radius: 0.45, hp: 10, speed: 0, aggroRange: 0, windup: 0, recover: 0, boss: true };
+SIM.enemies.thanatosDouble = { radius: 0.5, hp: 1, speed: 3.6, aggroRange: 0, windup: 0, recover: 0, boss: true };
 
 // Convertit une durée en secondes en nombre de pas de simulation
 export function ticks(seconds) {

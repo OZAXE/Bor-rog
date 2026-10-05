@@ -120,6 +120,35 @@ export function createEffects(scene, haloTexture) {
           burst(ev.x, 1.2, ev.z, 40, 0x2fff86, 5, 0.9);
           shake = Math.max(shake, 0.3);
           break;
+        case 'headSevered':
+          burst(ev.x, 1, ev.z, 18, 0xff7a2f, 2.5, 0.6);
+          break;
+        case 'cauterize':
+          burst(ev.x, 0.4, ev.z, 12, 0xffd27a, 1.5, 0.6);
+          break;
+        case 'headRegrow':
+          burst(ev.x, 0.8, ev.z, 14, 0x8a2a20, 1.5, 0.5);
+          break;
+        case 'hazardStart':
+          if (ev.kind === 'soul') {
+            burst(ev.x, 0.4, ev.z, 16, 0xb9c8ff, 2.5, 0.5);
+            shake = Math.max(shake, 0.08);
+          } else burst(ev.x, 0.2, ev.z, 10, 0xff7a1a, 1.5, 0.6);
+          break;
+        case 'reap':
+          for (let k = 0; k < 16; k++) {
+            const a = (k / 16) * Math.PI * 2;
+            burst(ev.x + Math.cos(a) * ev.r, 0.6, ev.z + Math.sin(a) * ev.r, 2, 0xd9e2ff, 0.8, 0.35);
+          }
+          shake = Math.max(shake, 0.12);
+          break;
+        case 'vanish':
+        case 'appear':
+          burst(ev.x, 1, ev.z, 20, 0x5a5470, 2, 0.6);
+          break;
+        case 'dispel':
+          burst(ev.x, 1, ev.z, 24, 0xb9c8ff, 2.5, 0.6);
+          break;
         case 'summon':
           burst(ev.x, 0.5, ev.z, 14, 0x8a5cff, 2, 0.6);
           break;

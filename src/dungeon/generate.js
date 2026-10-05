@@ -96,8 +96,9 @@ export function generateBossFloor(seed, floorIndex, bossId) {
   carveLine(dungeon, center(arena), center(start), 2);
   surroundWithWalls(dungeon);
 
-  // Quatre colonnes dans l'arène : des abris... et des murs où un boss qui charge s'écrase
-  for (const [c, r] of [
+  // Quatre colonnes dans l'arène de Cerbère : des abris... et des murs où il s'écrase
+  // en chargeant. L'Hydre occupe le centre ; Thanatos se bat en terrain dégagé.
+  for (const [c, r] of bossId !== 'cerberus' ? [] : [
     [arena.x + 3, arena.y + 3],
     [arena.x + arena.w - 4, arena.y + 3],
     [arena.x + 3, arena.y + arena.h - 4],
@@ -110,7 +111,8 @@ export function generateBossFloor(seed, floorIndex, bossId) {
   dungeon.stairs = center(sanctum);
   setTile(dungeon, dungeon.stairs.c, dungeon.stairs.r, TILE.STAIRS);
   const ac = center(arena);
-  dungeon.boss = { id: bossId, roomId: arena.id, x: ac.c + 0.5, z: ac.r - 2 + 0.5 };
+  // L'Hydre trône au centre de l'arène ; les autres boss attendent un peu au nord
+  dungeon.boss = { id: bossId, roomId: arena.id, x: ac.c + 0.5, z: ac.r + (bossId === 'hydra' ? 0 : -2) + 0.5 };
 
   placeTorches(rng, dungeon, { torchChance: 0.55 });
   placeDebris(rng, dungeon, { debrisChance: 0.02 });

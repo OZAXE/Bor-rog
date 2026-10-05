@@ -19,7 +19,7 @@ export function createGameState(seed, options = {}) {
     seed: String(seed),
     options: { enemies: options.enemies !== false, dungeonParams: options.dungeonParams || null },
     tick: 0, // nombre de pas de simulation écoulés (60 par seconde)
-    status: 'playing', // 'playing', 'choosing' (écran de Charon) ou 'dead'
+    status: 'playing', // 'playing', 'choosing' (écran de Charon), 'dead' ou 'victory'
     floorIndex: 0, // étage actuel (0 = premier)
     kills: 0,
     gold: 0, // oboles
@@ -54,6 +54,7 @@ export function createGameState(seed, options = {}) {
     // Salle verrouillée en cours : { roomId, doors, enemyIds } ou null
     lock: null,
     pickups: [], // objets au sol : { id, kind: 'obol' | 'potion', x, z, amount }
+    hazards: [], // zones dangereuses au sol (lave, âmes) : { id, x, z, r, warn, life, damage, every, timer }
     chests: [], // coffres : { id, x, z, opened }
     // Ce qui s'est passé pendant le DERNIER pas (coups, morts…), pour que le rendu
     // affiche des effets. Vidé à chaque pas : ce n'est pas une mémoire de la partie.
@@ -82,6 +83,7 @@ export function enterFloor(state, floorIndex) {
   state.enemies = [];
   state.lock = null;
   state.pickups = [];
+  state.hazards = [];
   // Un coffre au centre de chaque salle au trésor
   state.chests = state.dungeon.rooms
     .filter((r) => r.type === 'treasure')
@@ -93,7 +95,7 @@ export function enterFloor(state, floorIndex) {
   }
 }
 
-export function createEnemy(state, { type, x, z, roomId = -1, firstShotDelay = 0, elite = false, boss = false }) {
+export function createEnemy(state, { type, x, z, roomId = -1, firstShotDelay = 0, elite = false, boss = false, slot = -1 }) {
   // Caractéristiques selon l'étage et le statut d'élite (cf. src/systems/difficulty.js)
   const stats = enemyStats(type, state.floorIndex, elite);
   return {
@@ -106,6 +108,9 @@ export function createEnemy(state, { type, x, z, roomId = -1, firstShotDelay = 0
     facing: 0,
     elite,
     boss,
+    // Partie de boss (tête d'Hydre, double de Thanatos) : pas de barre de vie, pas de butin
+    part: type === 'hydraHead' || type === 'thanatosDouble',
+    slot, // emplacement d'une tête d'Hydre autour du corps
     stats,
     hp: stats.hp,
     maxHp: stats.hp,

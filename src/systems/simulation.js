@@ -9,6 +9,7 @@ import { updateEnemies } from './enemies.js';
 import { updateProjectiles } from './projectiles.js';
 import { updateRooms } from './rooms.js';
 import { updateLoot } from './loot.js';
+import { updateHazards } from './hazards.js';
 import { startDescent, updateDescent } from './descent.js';
 import { TILE, tileAt } from '../dungeon/tiles.js';
 
@@ -22,12 +23,13 @@ export function stepGame(state, rawIntent) {
     updateDescent(state, intent);
     return;
   }
-  // Partie terminée : l'état ne bouge plus (l'écran de fin s'affiche)
+  // Partie terminée (mort ou victoire) : l'état ne bouge plus (l'écran de fin s'affiche)
   if (state.status !== 'playing') return;
   state.tick++;
   updatePlayer(state, intent, STEP);
   updateEnemies(state, STEP);
   updateProjectiles(state, STEP);
+  updateHazards(state);
   if (state.status !== 'playing') return;
   updateRooms(state);
   updateLoot(state, STEP);
