@@ -122,6 +122,7 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
   const lavaEyeMat = new THREE.MeshBasicMaterial({ color: 0xffb03a });
   const whiteEyeMat = new THREE.MeshBasicMaterial({ color: 0xe8f0ff });
   const frost = new THREE.Color(0x9fd8ff); // givre de la Nova
+  const venomTint = new THREE.Color(0x6bff5a); // poison de la Chasseresse
   const auraMat = new THREE.MeshBasicMaterial({
     color: 0xf2c96b,
     transparent: true,
@@ -404,6 +405,7 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
         for (const m of v.mats) {
           m.color.copy(m.userData.base).lerp(white, flash);
           if (!flash && e.slow > 0) m.color.lerp(frost, 0.45);
+          else if (!flash && e.poison > 0) m.color.lerp(venomTint, 0.35);
         }
 
         // Boss : le marquage de l'attaque annoncée, de plus en plus net jusqu'au coup

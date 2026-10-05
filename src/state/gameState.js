@@ -20,9 +20,10 @@ export const STATE_VERSION = 8;
 // options.cls : classe du héros ('warrior', 'huntress', 'mystic' ; Guerrier par défaut)
 export function createGameState(seed, options = {}) {
   // Améliorations permanentes apportées par le joueur (même graine + mêmes rangs = même partie)
-  const meta = cleanMeta(options.meta);
   const cls = classOf(options.cls);
-  const maxHp = classRules(cls).maxHp + metaValue(meta, 'vigor') + Math.floor(attrValue(meta, 'demeter'));
+  const meta = cleanMeta({ ...options.meta, cls });
+  const maxHp =
+    classRules(cls).maxHp + metaValue(meta, 'vigor') + metaValue(meta, 'bulwark') + Math.floor(attrValue(meta, 'demeter'));
   const state = {
     version: STATE_VERSION,
     seed: String(seed),
@@ -64,7 +65,11 @@ export function createGameState(seed, options = {}) {
       dashZ: 0,
       dashHeld: false,
       specialCooldown: 0, // recharge de la capacité spéciale (pas)
-      specialHeld: false, // bouton déjà enfoncé au pas précédent (une capacité par appui) // bouton d'esquive déjà enfoncé au pas précédent (une esquive par appui)
+      specialHeld: false, // bouton déjà enfoncé au pas précédent (une capacité par appui)
+      specialEcho: 0, // Tempête / Seconde salve : pas avant la seconde frappe
+      echoFacing: 0, // direction de la seconde salve
+      riposte: false, // Riposte : prochain coup renforcé après une parade
+      hunt: 0, // Instinct de chasse : pas restants de vitesse et de cadence accrues // bouton d'esquive déjà enfoncé au pas précédent (une esquive par appui)
       invuln: 0, // invulnérabilité restante
       boons: {}, // bienfaits possédés : { id: nombre }
       killsSinceHeal: 0, // pour le Tribut d'Hadès

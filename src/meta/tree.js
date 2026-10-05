@@ -107,16 +107,75 @@ export const TALENTS = {
   pact: { attr: 'charon', tier: 3, lane: 0.5, name: 'Pacte de Charon', per: 1, ranks: 1, requires: ['choice4', 'freeReroll'],
     text: () => 'Chaque partie commence par le choix d\'un bienfait' },
 };
+
+// ---------- Arbres de classe (étape 7c) ----------
+// Même principe, mais propres à une classe (`cls`). Leurs paliers s'ouvrent avec la
+// progression totale : la somme des niveaux gagnés dans tous les attributs (0 à 36).
+export const CLASS_TIER_LEVELS = [0, 9, 18, 27];
+const CLASS_TALENTS = {
+  // ---------- Guerrier ----------
+  parry: { cls: 'warrior', tier: 0, lane: 0, name: 'Parade', per: 0.1, ranks: 2, requires: [],
+    text: (v) => `${pct(v)} de chance de parer un coup (aucun dégât)` },
+  whirlHaste: { cls: 'warrior', tier: 0, lane: 1, name: 'Élan du cyclone', per: 0.15, ranks: 2, requires: [],
+    text: (v) => `Tourbillon rechargé ${pct(v)} plus vite` },
+  riposte: { cls: 'warrior', tier: 1, lane: 0, name: 'Riposte', per: 1, ranks: 1, requires: ['parry'],
+    text: () => 'Après une parade, le coup suivant inflige des dégâts doublés' },
+  whirlSize: { cls: 'warrior', tier: 1, lane: 1, name: 'Grand cyclone', per: 0.2, ranks: 2, requires: ['whirlHaste'],
+    text: (v) => `Tourbillon ${pct(v)} plus large` },
+  bulwark: { cls: 'warrior', tier: 2, lane: 0, name: 'Rempart', per: 3, ranks: 1, requires: ['riposte'],
+    text: (v) => `+${v} PV maximum` },
+  tempest: { cls: 'warrior', tier: 2, lane: 1, name: 'Tempête', per: 1, ranks: 1, requires: ['whirlSize'],
+    text: () => 'Le Tourbillon frappe une seconde fois juste après' },
+  titan: { cls: 'warrior', tier: 3, lane: 0.5, name: 'Colère des Titans', per: 1, ranks: 1, requires: ['bulwark', 'tempest'],
+    text: () => 'Chaque ennemi vaincu recharge le Tourbillon de 1 s' },
+
+  // ---------- Chasseresse ----------
+  venom: { cls: 'huntress', tier: 0, lane: 0, name: 'Flèches empoisonnées', per: 0.6, ranks: 2, requires: [],
+    text: (v) => `Le poison inflige ${num(v)} dégât par seconde pendant 3 s` },
+  quiver: { cls: 'huntress', tier: 0, lane: 1, name: 'Carquois léger', per: 0.15, ranks: 2, requires: [],
+    text: (v) => `Volée rechargée ${pct(v)} plus vite` },
+  linger: { cls: 'huntress', tier: 1, lane: 0, name: 'Venin tenace', per: 2, ranks: 1, requires: ['venom'],
+    text: (v) => `Le poison dure ${v} s de plus` },
+  barrage: { cls: 'huntress', tier: 1, lane: 1, name: 'Volée nourrie', per: 2, ranks: 2, requires: ['quiver'],
+    text: (v) => `+${v} flèches à la Volée` },
+  marksman: { cls: 'huntress', tier: 2, lane: 0, name: 'Tir précis', per: 0.4, ranks: 1, requires: ['linger'],
+    text: (v) => `+${pct(v)} de dégâts sur une cible à plus de 5 m` },
+  echoVolley: { cls: 'huntress', tier: 2, lane: 1, name: 'Seconde salve', per: 1, ranks: 1, requires: ['barrage'],
+    text: () => 'La Volée tire une seconde salve juste après' },
+  hunt: { cls: 'huntress', tier: 3, lane: 0.5, name: 'Instinct de chasse', per: 0.25, ranks: 1, requires: ['marksman', 'echoVolley'],
+    text: (v) => `Chaque ennemi vaincu : +${pct(v)} de vitesse et de cadence pendant 3 s` },
+
+  // ---------- Mystique ----------
+  bigOrb: { cls: 'mystic', tier: 0, lane: 0, name: 'Orbe ample', per: 0.15, ranks: 2, requires: [],
+    text: (v) => `Explosion des orbes ${pct(v)} plus large` },
+  deepFreeze: { cls: 'mystic', tier: 0, lane: 1, name: 'Givre profond', per: 1.5, ranks: 2, requires: [],
+    text: (v) => `La Nova ralentit ${sec(v)} de plus` },
+  chain: { cls: 'mystic', tier: 1, lane: 0, name: 'Réaction en chaîne', per: 0.35, ranks: 2, requires: ['bigOrb'],
+    text: (v) => `${pct(v)} de chance qu'un ennemi tué par une explosion explose à son tour` },
+  quickNova: { cls: 'mystic', tier: 1, lane: 1, name: 'Nova vive', per: 0.15, ranks: 2, requires: ['deepFreeze'],
+    text: (v) => `Nova rechargée ${pct(v)} plus vite` },
+  twinOrbs: { cls: 'mystic', tier: 2, lane: 0, name: 'Orbes jumeaux', per: 0.8, ranks: 1, requires: ['chain'],
+    text: (v) => `Lance deux orbes (${pct(v)} des dégâts chacun)` },
+  shatter: { cls: 'mystic', tier: 2, lane: 1, name: 'Bris de glace', per: 0.75, ranks: 1, requires: ['quickNova'],
+    text: (v) => `+${pct(v)} de dégâts sur les ennemis ralentis` },
+  torrent: { cls: 'mystic', tier: 3, lane: 0.5, name: "Torrent d'âmes", per: 1.5, ranks: 1, requires: ['twinOrbs', 'shatter'],
+    text: (v) => `Les explosions d'orbe ralentissent ${sec(v)}` },
+};
+for (const [id, t] of Object.entries(CLASS_TALENTS)) TALENTS[id] = { attr: null, ...t };
+
 export const TALENT_IDS = Object.keys(TALENTS);
 
 function pct(v) {
   return `${Math.round(v * 100)} %`;
 }
+function num(v) {
+  return v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+}
 function sec(v) {
   return `${v.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} s`;
 }
 
-// ---------- Lecture des améliorations d'un joueur (meta = { attrs, talents }) ----------
+// ---------- Lecture des améliorations d'un joueur (meta = { attrs, talents, cls }) ----------
 
 // Rang d'un talent (0 si absent)
 export function rankOf(meta, id) {
@@ -169,7 +228,11 @@ export function talentBlocker(meta, id) {
   const t = TALENTS[id];
   if (!t) return 'inconnu';
   if (rankOf(meta, id) >= t.ranks) return 'maximum';
-  if (attrLevel(meta, t.attr) < TIER_LEVELS[t.tier]) return 'palier';
+  if (t.cls) {
+    // Talent de classe : seulement pour cette classe, palier selon la progression totale
+    if (t.cls !== ((meta && meta.cls) || 'warrior')) return 'classe';
+    if (talentPoints(meta.attrs) < CLASS_TIER_LEVELS[t.tier]) return 'palier';
+  } else if (attrLevel(meta, t.attr) < TIER_LEVELS[t.tier]) return 'palier';
   if (t.requires.length && !t.requires.some((r) => rankOf(meta, r) > 0)) return 'verrouillé';
   if (pointsSpent(meta) + talentCost(id) > talentPoints(meta.attrs)) return 'pas de point';
   return '';
@@ -179,7 +242,9 @@ export function talentBlocker(meta, id) {
 // dans l'ordre des paliers selon les règles. Un talent impossible (palier, parent,
 // points insuffisants) est simplement ignoré : le résultat est toujours un build valide.
 export function cleanMeta(raw) {
-  const meta = { attrs: cleanAttrs(raw && raw.attrs), talents: {} };
+  // cls : classe du héros (les talents de classe n'existent que pour elle)
+  const cls = raw && ['warrior', 'huntress', 'mystic'].includes(raw.cls) ? raw.cls : 'warrior';
+  const meta = { attrs: cleanAttrs(raw && raw.attrs), talents: {}, cls };
   const want = (raw && raw.talents) || {};
   const order = [...TALENT_IDS].sort((a, b) => TALENTS[a].tier - TALENTS[b].tier);
   for (const id of order) {

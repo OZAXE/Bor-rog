@@ -3,7 +3,7 @@
 // on dépense ses points dans l'arbre de chaque attribut. Un onglet par attribut,
 // un arbre dessiné (nœuds + liens). Les règles sont dans src/meta/ (tree.js, profile.js).
 
-import { ATTRS, ATTR_IDS, ATTR_MAX, TALENTS, TALENT_IDS, TIER_LEVELS, attrLevel, rankOf, talentBlocker, talentCost } from '../meta/tree.js';
+import { ATTRS, ATTR_IDS, ATTR_MAX, TALENTS, TALENT_IDS, TIER_LEVELS, CLASS_TIER_LEVELS, attrLevel, rankOf, talentBlocker, talentCost, talentPoints } from '../meta/tree.js';
 import { buyLevel, levelCost, levelBlocker, learn, freePoints, spentPoints, resetTalents, investedShadows } from '../meta/profile.js';
 import { encodeProfile, decodeProfile } from '../meta/transfer.js';
 import { classUnlocked, selectClass } from '../meta/profile.js';
@@ -40,7 +40,8 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
 
   // ---------- Onglets ----------
   const tabs = new Map();
-  for (const id of ATTR_IDS) {
+  // 4 onglets d'attributs + 1 onglet pour l'arbre de la classe choisie
+  for (const id of [...ATTR_IDS, 'class']) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = `tab tab-${id}`;
@@ -154,39 +155,54 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
       b.classList.toggle('on', id === p.cls);
     }
 
+    const classTab = current === 'class';
+    const total = talentPoints(p.attrs); // progression totale : niveaux gagnés dans tous les attributs
     for (const [id, b] of tabs) {
-      b.innerHTML = `${ATTRS[id].name}<small>niveau ${attrLevel(p, id)}</small>`;
+      b.innerHTML =
+        id === 'class'
+          ? `${CLASSES[p.cls].name}<small>arbre de classe</small>`
+          : `${ATTRS[id].name}<small>niveau ${attrLevel(p, id)}</small>`;
       b.classList.toggle('on', id === current);
     }
 
-    // Carte de l'attribut : niveau, bonus passif, achat du niveau suivant
-    const a = ATTRS[current];
-    const lvl = attrLevel(p, current);
-    el('.attr-name').textContent = `${a.name} · ${a.theme}`;
-    el('.attr-level').textContent = `Niveau ${lvl} / ${ATTR_MAX}`;
-    el('.attr-bonus').textContent = lvl > 1 ? a.bonus(lvl - 1) : 'Aucun bonus pour l\'instant';
+    // Carte : attribut (niveau, bonus, achat) ou classe (progression totale)
+    const a = classTab ? null : ATTRS[current];
+    const lvl = classTab ? total : attrLevel(p, current);
     const lb = el('.btn-level');
-    const blocker = levelBlocker(p, current);
-    lb.disabled = blocker !== '';
-    lb.innerHTML =
-      blocker === 'maximum'
-        ? 'Niveau maximum'
-        : `Monter au niveau ${lvl + 1}<small>${levelCost(p, current)} Ombres · +1 point · ${a.bonus(lvl)}</small>`;
+    if (classTab) {
+      el('.attr-name').textContent = `${CLASSES[p.cls].name} · ${CLASSES[p.cls].weaponName}`;
+      el('.attr-level').textContent = `Progression totale ${total} / ${ATTR_IDS.length * (ATTR_MAX - 1)}`;
+      el('.attr-bonus').textContent = 'Monte tes attributs pour ouvrir les paliers de cet arbre';
+      lb.hidden = true;
+    } else {
+      lb.hidden = false;
+      el('.attr-name').textContent = `${a.name} · ${a.theme}`;
+      el('.attr-level').textContent = `Niveau ${lvl} / ${ATTR_MAX}`;
+      el('.attr-bonus').textContent = lvl > 1 ? a.bonus(lvl - 1) : 'Aucun bonus pour l\'instant';
+      const blocker = levelBlocker(p, current);
+      lb.disabled = blocker !== '';
+      lb.innerHTML =
+        blocker === 'maximum'
+          ? 'Niveau maximum'
+          : `Monter au niveau ${lvl + 1}<small>${levelCost(p, current)} Ombres · +1 point · ${a.bonus(lvl)}</small>`;
+    }
 
     // Arbre : une rangée par palier, deux chemins, l'ultime au centre
     tiersEl.innerHTML = '';
-    TIER_LEVELS.forEach((need, tier) => {
+    const levels = classTab ? CLASS_TIER_LEVELS : TIER_LEVELS;
+    const inTree = (t) => (classTab ? TALENTS[t].cls === p.cls : TALENTS[t].attr === current);
+    levels.forEach((need, tier) => {
       const row = document.createElement('div');
       row.className = `tier${lvl >= need ? '' : ' closed'}`;
-      row.innerHTML = `<span class="tier-label">Niv. ${need}</span>`;
-      for (const id of TALENT_IDS.filter((t) => TALENTS[t].attr === current && TALENTS[t].tier === tier)) {
+      row.innerHTML = `<span class="tier-label">${classTab ? `Total ${need}` : `Niv. ${need}`}</span>`;
+      for (const id of TALENT_IDS.filter((t) => inTree(t) && TALENTS[t].tier === tier)) {
         const t = TALENTS[id];
         const btn = nodes.get(id);
         const r = rankOf(p, id);
         const why = talentBlocker(p, id);
         const shown = Math.max(1, Math.min(r + 1, t.ranks)); // effet au rang suivant (ou atteint)
         let foot;
-        if (why === 'palier') foot = `${a.name} niveau ${need} requis`;
+        if (why === 'palier') foot = classTab ? `Progression totale ${need} requise` : `${a.name} niveau ${need} requis`;
         else if (why === 'verrouillé') foot = `Requiert ${t.requires.map((q) => TALENTS[q].name).join(' ou ')}`;
         else if (why === 'maximum') foot = 'Complet';
         else if (why === 'pas de point') foot = `${talentCost(id)} point${talentCost(id) > 1 ? 's' : ''} requis`;
@@ -217,7 +233,7 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
     const p = profile.current;
     for (const id of TALENT_IDS) {
       const t = TALENTS[id];
-      if (t.attr !== current) continue;
+      if (current === 'class' ? t.cls !== profile.current.cls : t.attr !== current) continue;
       for (const parent of t.requires) {
         const a = nodes.get(parent).getBoundingClientRect();
         const b = nodes.get(id).getBoundingClientRect();
