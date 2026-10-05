@@ -1,5 +1,5 @@
 // Contrôles mobiles : joystick virtuel qui apparaît sous le pouce, sur la partie
-// gauche de l'écran ; boutons Frapper et Esquiver sous le pouce droit.
+// gauche de l'écran ; boutons Frapper, Esquiver et capacité spéciale sous le pouce droit.
 // Pas besoin de viser : la simulation oriente le coup vers l'ennemi le plus proche.
 // Les Pointer Events gèrent le multitouch : chaque doigt a son pointerId.
 
@@ -61,8 +61,8 @@ export function createTouchControls(settings) {
   zone.addEventListener('pointercancel', end);
 
   // ---------- Boutons d'action (maintenus) ----------
-  const held = { attack: false, dash: false };
-  for (const [name, id] of [['attack', 'btn-attack'], ['dash', 'btn-dash']]) {
+  const held = { attack: false, dash: false, special: false };
+  for (const [name, id] of [['attack', 'btn-attack'], ['dash', 'btn-dash'], ['special', 'btn-special']]) {
     const btn = document.getElementById(id);
     const down = (e) => {
       e.preventDefault();
@@ -88,6 +88,9 @@ export function createTouchControls(settings) {
     },
     get dash() {
       return held.dash;
+    },
+    get special() {
+      return held.special;
     },
   };
 }

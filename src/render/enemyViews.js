@@ -121,6 +121,7 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
   const lavaMat = new THREE.MeshBasicMaterial({ color: 0xff6a1a, transparent: true, opacity: 0.75 });
   const lavaEyeMat = new THREE.MeshBasicMaterial({ color: 0xffb03a });
   const whiteEyeMat = new THREE.MeshBasicMaterial({ color: 0xe8f0ff });
+  const frost = new THREE.Color(0x9fd8ff); // givre de la Nova
   const auraMat = new THREE.MeshBasicMaterial({
     color: 0xf2c96b,
     transparent: true,
@@ -398,9 +399,12 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
           v.body.userData.wings[1].rotation.y = Math.PI - flap;
         }
 
-        // Clignotement blanc quand il est touché
+        // Clignotement blanc quand il est touché ; teinte de givre quand la Nova le ralentit
         const flash = e.hitFlash > 0 ? 0.85 : 0;
-        for (const m of v.mats) m.color.copy(m.userData.base).lerp(white, flash);
+        for (const m of v.mats) {
+          m.color.copy(m.userData.base).lerp(white, flash);
+          if (!flash && e.slow > 0) m.color.lerp(frost, 0.45);
+        }
 
         // Boss : le marquage de l'attaque annoncée, de plus en plus net jusqu'au coup
         if (v.bossWarns) {

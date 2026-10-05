@@ -18,6 +18,7 @@ import { createLootView } from './render/lootView.js';
 import { createHazardView } from './render/hazardView.js';
 import { BOONS } from './systems/boons.js';
 import { rerollCost, healCost } from './systems/descent.js';
+import { classRules } from './systems/classes.js';
 import { SIM } from './systems/simConfig.js';
 import { ZONE_THEMES } from './render/zoneThemes.js';
 import { zoneOf, FLOORS_PER_ZONE } from './dungeon/zones.js';
@@ -471,6 +472,7 @@ function frame(timestamp) {
   const facing = lerpAngle(prev.facing, p.facing, alpha);
   playerView.setClass(p.cls);
   setAttackLabel(p.cls);
+  updateSpecial();
   playerView.update(x, z, facing, Math.hypot(p.vx, p.vz), time, {
     blink: p.invuln > 0 && p.dashTimer === 0 && state.status === 'playing',
     dashing: p.dashTimer > 0,
@@ -519,6 +521,29 @@ showSeed();
 showFloor(false);
 updateHud();
 requestAnimationFrame(frame);
+
+// Capacité spéciale : nom selon la classe, recharge affichée (bouton tactile et jauge PC)
+const SPECIAL_NAMES = { whirl: 'Tourbillon', volley: 'Volée', nova: 'Nova' };
+const specialBtn = $('btn-special');
+const specialHud = $('special-hud');
+let specialKey = '';
+function updateSpecial() {
+  const p = state.player;
+  const sp = classRules(p.cls).special;
+  const name = SPECIAL_NAMES[sp.id];
+  const total = Math.round(sp.cooldown * SIM.tickRate);
+  const charge = 1 - p.specialCooldown / total;
+  const ready = p.specialCooldown === 0;
+  const key = `${name}|${Math.round(charge * 40)}|${ready}`;
+  if (key === specialKey) return;
+  specialKey = key;
+  specialBtn.textContent = name;
+  specialBtn.style.setProperty('--charge', charge.toFixed(3));
+  specialBtn.classList.toggle('ready', ready);
+  specialHud.querySelector('.name').textContent = `E · ${name}`;
+  specialHud.querySelector('.fill').style.width = `${Math.round(charge * 100)}%`;
+  specialHud.classList.toggle('ready', ready);
+}
 
 // Bouton d'attaque tactile : son nom suit l'arme de la classe
 const ATTACK_LABELS = { warrior: 'Frapper', huntress: 'Tirer', mystic: 'Lancer' };

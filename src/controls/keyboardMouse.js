@@ -1,5 +1,5 @@
 // Contrôles PC : clavier pour se déplacer, souris pour viser.
-// Clic gauche (ou J) : frapper. Espace (ou Maj, K) : esquiver.
+// Clic gauche (ou J) : frapper. Espace (ou Maj, K) : esquiver. Clic droit (ou E, L) : capacité spéciale.
 //
 // On utilise event.code (touche PHYSIQUE) et non event.key (caractère tapé) :
 // "KeyW" est le Z en AZERTY et le W en QWERTY, donc ZQSD et WASD marchent sans réglage.
@@ -11,11 +11,13 @@ const KEYS = {
   right: ['KeyD', 'ArrowRight'],
   attack: ['KeyJ', 'Enter'],
   dash: ['Space', 'ShiftLeft', 'ShiftRight', 'KeyK'],
+  special: ['KeyE', 'KeyL'],
 };
 
 export function createKeyboardMouse(canvas) {
   const pressed = new Set();
   let mouseAttack = false; // bouton gauche maintenu
+  let mouseSpecial = false; // bouton droit maintenu
   // Position de la souris dans la fenêtre ; null tant qu'elle n'a pas bougé
   // (sur une tablette avec clavier, on ne vise donc pas un point fantôme)
   let mouse = null;
@@ -32,14 +34,17 @@ export function createKeyboardMouse(canvas) {
   window.addEventListener('blur', () => {
     pressed.clear();
     mouseAttack = false;
+    mouseSpecial = false;
   });
 
   // Clic gauche maintenu = attaque (sur le jeu uniquement, pas sur l'interface)
   canvas.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button === 0) mouseAttack = true;
+    if (e.pointerType === 'mouse' && e.button === 2) mouseSpecial = true;
   });
   window.addEventListener('pointerup', (e) => {
     if (e.pointerType === 'mouse' && e.button === 0) mouseAttack = false;
+    if (e.pointerType === 'mouse' && e.button === 2) mouseSpecial = false;
   });
 
   window.addEventListener('pointermove', (e) => {
@@ -62,6 +67,9 @@ export function createKeyboardMouse(canvas) {
     },
     get dash() {
       return is('dash');
+    },
+    get special() {
+      return mouseSpecial || is('special');
     },
   };
 }

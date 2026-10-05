@@ -31,6 +31,7 @@ export function createInput(canvas) {
         aimY: aim ? aim.y : 0,
         attack: kb.attack || (touch ? touch.attack : false),
         dash: kb.dash || (touch ? touch.dash : false),
+        special: kb.special || (touch ? touch.special : false),
       };
     },
   };

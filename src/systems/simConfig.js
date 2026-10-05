@@ -195,7 +195,14 @@ SIM.shadows = {
 // les autres classes remplacent certains réglages. weapon : 'sword' (arc de coup),
 // 'bow' (flèche qui touche le premier ennemi) ou 'orb' (orbe lent qui explose en zone).
 SIM.classes = {
-  warrior: { maxHp: 12, speed: 1, weapon: 'sword', attack: {} },
+  warrior: {
+    maxHp: 12,
+    speed: 1,
+    weapon: 'sword',
+    attack: {},
+    // Tourbillon : coup circulaire autour du héros, qui repousse fort (invulnérable pendant la rotation)
+    special: { id: 'whirl', cooldown: 8, radius: 2.3, damageMult: 1.5, knockback: 11, invuln: 0.3 },
+  },
   huntress: {
     maxHp: 11,
     speed: 1.08, // plus mobile
@@ -203,6 +210,8 @@ SIM.classes = {
     attack: { cooldown: 0.36, damage: 2, duration: 0.12, moveFactor: 0.7, knockback: 4, autoAimRange: 9 },
     // range : portée de la flèche (m) ; pierce : ennemis traversés avant de s'arrêter
     shot: { speed: 16, range: 9, radius: 0.15, pierce: 1 },
+    // Volée : 5 flèches en éventail
+    special: { id: 'volley', cooldown: 7, count: 5, spread: 0.9 },
   },
   mystic: {
     maxHp: 11,
@@ -210,6 +219,9 @@ SIM.classes = {
     weapon: 'orb',
     attack: { cooldown: 0.65, damage: 3, duration: 0.25, moveFactor: 0.6, knockback: 5, autoAimRange: 7 },
     shot: { speed: 8, range: 7, radius: 0.25, blast: 1.6 }, // blast : rayon de l'explosion (m)
+    // Nova : explosion glacée autour du héros ; les ennemis touchés (hors boss) sont
+    // ralentis : ils ne "pensent" et ne bougent qu'un pas sur deux pendant `slow` secondes
+    special: { id: 'nova', cooldown: 7, radius: 3, damageMult: 1.5, slow: 3 },
   },
 };
 

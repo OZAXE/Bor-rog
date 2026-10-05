@@ -7,6 +7,7 @@ import { playerStats } from './boons.js';
 import { dropFromEnemy, dropBossReward } from './loot.js';
 import { nextFloat } from '../core/rng.js';
 import { metaValue, rankOf } from '../meta/tree.js';
+import { classRules } from './classes.js';
 
 export function updatePlayer(state, intent, dt) {
   const p = state.player;
@@ -86,6 +87,56 @@ export function updatePlayer(state, intent, dt) {
       resolvePlayerHit(state);
     } else shoot(state, st);
   }
+
+  // ---------- Capacité spéciale (une par appui, si elle est rechargée) ----------
+  const specialPressed = intent.special && !p.specialHeld;
+  p.specialHeld = intent.special;
+  if (specialPressed && p.specialCooldown === 0 && p.dashTimer === 0) {
+    if (aiming) p.facing = facingOf(intent.aimX, -intent.aimY);
+    else {
+      const target = autoAimTarget(state);
+      if (target) p.facing = facingOf(target.x - p.x, target.z - p.z);
+    }
+    useSpecial(state, st);
+  }
+}
+
+// Capacités spéciales des classes (réglages : SIM.classes[classe].special)
+function useSpecial(state, st) {
+  const p = state.player;
+  const sp = classRules(p.cls).special;
+  p.specialCooldown = ticks(sp.cooldown);
+  p.attackTimer = 0;
+  if (sp.id === 'volley') {
+    // Volée : flèches en éventail autour de la direction visée
+    const base = p.facing;
+    for (let k = 0; k < sp.count; k++) {
+      p.facing = base + (k / (sp.count - 1) - 0.5) * sp.spread;
+      shoot(state, st, true);
+    }
+    p.facing = base;
+    state.events.push({ type: 'special', id: 'volley', x: p.x, z: p.z, facing: base });
+    return;
+  }
+  // Tourbillon (Guerrier) et Nova (Mystique) : tout ce qui est autour du héros
+  if (sp.id === 'whirl') p.invuln = Math.max(p.invuln, ticks(sp.invuln));
+  state.events.push({ type: 'special', id: sp.id, x: p.x, z: p.z, r: sp.radius, facing: p.facing });
+  for (const e of state.enemies) {
+    const dx = e.x - p.x;
+    const dz = e.z - p.z;
+    const d = Math.hypot(dx, dz);
+    if (d > sp.radius + SIM.enemies[e.type].radius) continue;
+    if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
+    const dir = d > 1e-6 ? { x: dx / d, z: dz / d } : { x: 0, z: 1 };
+    if (!damageEnemy(state, e, st.damage * sp.damageMult, dir)) continue;
+    if (e.boss || e.part) continue; // un boss ne recule pas et n'est pas ralenti
+    if (sp.knockback) {
+      e.kvx = dir.x * sp.knockback;
+      e.kvz = dir.z * sp.knockback;
+    }
+    if (sp.slow) e.slow = ticks(sp.slow);
+  }
+  removeDeadEnemies(state);
 }
 
 // Le coup touche tous les ennemis dans l'arc, à portée, et visibles (pas à travers un mur)
@@ -107,12 +158,13 @@ function resolvePlayerHit(state) {
 
 // Chasseresse et Mystique : le coup est un projectile allié (flèche ou orbe), qui
 // part devant le héros dans la direction visée. Il est résolu dans projectiles.js.
-function shoot(state, st) {
+// special : tir d'une capacité (Volée), sans Élan ni événement de tir
+function shoot(state, st, special = false) {
   const p = state.player;
   const d = dirOf(p.facing);
   // Élan : bonus sur le premier tir après une esquive
-  const bonus = p.afterDash > 0 ? st.momentum : 0;
-  p.afterDash = 0;
+  const bonus = !special && p.afterDash > 0 ? st.momentum : 0;
+  if (!special) p.afterDash = 0;
   const start = SIM.player.radius + 0.2;
   const kind = st.weapon === 'bow' ? 'heroArrow' : 'orb';
   state.projectiles.push({
@@ -130,7 +182,7 @@ function shoot(state, st) {
     hit: [], // ennemis déjà touchés par ce projectile
     blast: st.blast, // rayon d'explosion de l'orbe (0 = pas d'explosion)
   });
-  state.events.push({ type: 'heroShot', kind, x: p.x, z: p.z, facing: p.facing });
+  if (!special) state.events.push({ type: 'heroShot', kind, x: p.x, z: p.z, facing: p.facing });
 }
 
 // Danse des lames : pendant l'esquive, chaque ennemi traversé est frappé une fois
@@ -299,6 +351,7 @@ function tickDown(p, st) {
   }
   if (p.invuln > 0) p.invuln--;
   if (p.rage > 0) p.rage--;
+  if (p.specialCooldown > 0) p.specialCooldown--;
   if (p.afterDash > 0) p.afterDash--;
 }
 
