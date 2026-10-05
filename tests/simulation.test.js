@@ -65,7 +65,8 @@ test("un bot va du départ à l'escalier et descend, sur 25 graines", () => {
     const maxTicks = 60 * 90; // 90 secondes de jeu maximum
     let t = 0;
     while (state.floorIndex === 0 && t < maxTicks) {
-      stepGame(state, bot(state.player));
+      // Sur l'escalier, l'écran de Charon s'ouvre : on prend le premier bienfait
+      stepGame(state, state.status === 'choosing' ? { choice: 0 } : bot(state.player));
       assert.ok(!overlapsSolid(state.dungeon, state.player, SIM.player.radius), `bot-${s} dans un mur`);
       t++;
     }

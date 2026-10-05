@@ -3,10 +3,13 @@
 import { SIM, ticks } from './simConfig.js';
 import { moveCircle } from './collision.js';
 import { hasLineOfSight, facingOf, dirOf, inArc, angleBetween } from './geometry.js';
+import { playerStats } from './boons.js';
+import { dropFromEnemy } from './loot.js';
 
 export function updatePlayer(state, intent, dt) {
   const p = state.player;
   const cfg = SIM.player;
+  const st = playerStats(p);
   tickDown(p);
 
   const moving = intent.moveX !== 0 || intent.moveY !== 0;
@@ -24,7 +27,7 @@ export function updatePlayer(state, intent, dt) {
     p.dashX = d.x;
     p.dashZ = d.z;
     p.dashTimer = ticks(cfg.dash.duration);
-    p.dashCooldown = ticks(cfg.dash.cooldown);
+    p.dashCooldown = ticks(st.dashCooldown);
     p.invuln = Math.max(p.invuln, ticks(cfg.dash.invuln));
     p.attackTimer = 0; // l'esquive annule le coup en cours
     p.facing = facingOf(p.dashX, p.dashZ);
@@ -37,8 +40,8 @@ export function updatePlayer(state, intent, dt) {
     p.vz = p.dashZ * cfg.dash.speed;
   } else {
     const slow = p.attackTimer > 0 ? cfg.attack.moveFactor : 1;
-    const targetVx = moveX * cfg.speed * slow;
-    const targetVz = moveZ * cfg.speed * slow;
+    const targetVx = moveX * st.speed * slow;
+    const targetVz = moveZ * st.speed * slow;
     // Accélération franche, freinage encore plus franc : le héros répond tout de suite
     const rate = (moving ? cfg.acceleration : cfg.deceleration) * dt;
     p.vx = approach(p.vx, targetVx, rate);
@@ -69,7 +72,7 @@ export function updatePlayer(state, intent, dt) {
       if (target) p.facing = facingOf(target.x - p.x, target.z - p.z);
     }
     p.attackTimer = ticks(cfg.attack.duration);
-    p.attackCooldown = ticks(cfg.attack.cooldown);
+    p.attackCooldown = ticks(st.attackCooldown);
     state.events.push({ type: 'swing', x: p.x, z: p.z, facing: p.facing });
     resolvePlayerHit(state);
   }
@@ -79,12 +82,13 @@ export function updatePlayer(state, intent, dt) {
 function resolvePlayerHit(state) {
   const p = state.player;
   const a = SIM.player.attack;
+  const st = playerStats(p);
   const dir = dirOf(p.facing);
   for (const e of state.enemies) {
     const r = SIM.enemies[e.type].radius;
-    if (!inArc(p.x, p.z, p.facing, a.range, a.arc, e.x, e.z, r)) continue;
+    if (!inArc(p.x, p.z, p.facing, st.attackRange, a.arc, e.x, e.z, r)) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
-    e.hp -= a.damage;
+    e.hp -= st.damage;
     e.hitFlash = ticks(0.12);
     e.alert = true;
     // Recul dans l'axe du coup : éloigne l'ennemi et interrompt sa préparation
@@ -101,6 +105,15 @@ function resolvePlayerHit(state) {
   state.enemies = state.enemies.filter((e) => {
     if (e.hp > 0) return true;
     state.events.push({ type: 'enemyDied', id: e.id, enemyType: e.type, x: e.x, z: e.z });
+    dropFromEnemy(state, e);
+    // Tribut d'Hadès : la vie revient au fil des ennemis vaincus
+    if (st.killsPerHeal && ++p.killsSinceHeal >= st.killsPerHeal) {
+      p.killsSinceHeal = 0;
+      if (p.hp < p.maxHp) {
+        p.hp++;
+        state.events.push({ type: 'heal', amount: 1, x: p.x, z: p.z });
+      }
+    }
     return false;
   });
   state.kills += before - state.enemies.length;
@@ -113,7 +126,7 @@ export function autoAimTarget(state) {
   let bestScore = Infinity;
   for (const e of state.enemies) {
     const dist = Math.hypot(e.x - p.x, e.z - p.z);
-    if (dist > SIM.player.attack.autoAimRange) continue;
+    if (dist > SIM.player.attack.autoAimRange * (playerStats(p).attackRange / SIM.player.attack.range)) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
     // Un ennemi derrière "compte" comme 1,5 m plus loin qu'un ennemi devant
     const behind = angleBetween(p.facing, facingOf(e.x - p.x, e.z - p.z)) / Math.PI;
@@ -131,7 +144,7 @@ export function hurtPlayer(state, amount, fromX, fromZ) {
   const p = state.player;
   if (p.invuln > 0 || state.status !== 'playing') return false;
   p.hp = Math.max(0, p.hp - amount);
-  p.invuln = ticks(SIM.player.hurtInvuln);
+  p.invuln = ticks(playerStats(p).hurtInvuln);
   state.events.push({ type: 'playerHurt', amount, x: p.x, z: p.z, fromX, fromZ });
   if (p.hp === 0) {
     state.status = 'dead';

@@ -123,7 +123,7 @@ test('anti-blocage : sur 20 parties agitées, les enfermés sont toujours dans l
     let bot = makePathBot(s.dungeon, s.dungeon.stairs);
     let floor = 0;
     let locks = 0;
-    for (let t = 0; t < 60 * 120 && s.status === 'playing'; t++) {
+    for (let t = 0; t < 60 * 120 && s.status !== 'dead'; t++) {
       if (s.floorIndex !== floor) {
         floor = s.floorIndex;
         bot = makePathBot(s.dungeon, s.dungeon.stairs);
@@ -144,6 +144,7 @@ test('anti-blocage : sur 20 parties agitées, les enfermés sont toujours dans l
         const l = Math.hypot(dx, dz) || 1;
         intent = { moveX: dx / l, moveY: -dz / l, aimX: dx / l, aimY: -dz / l, attack: l < 1.8 };
       } else intent = { ...intent, attack: true };
+      if (s.status === 'choosing') intent = { choice: 0 };
       const before = !!s.lock;
       stepGame(s, intent);
       if (!before && s.lock) locks++;

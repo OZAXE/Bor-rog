@@ -7,7 +7,7 @@ import { generateFloor } from '../dungeon/generate.js';
 import { populateFloor } from '../dungeon/populate.js';
 import { SIM, ticks } from '../systems/simConfig.js';
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 // options.enemies : false pour un donjon vide (tests d'exploration)
 // options.dungeonParams : réglages du générateur d'étages (tests)
@@ -17,9 +17,11 @@ export function createGameState(seed, options = {}) {
     seed: String(seed),
     options: { enemies: options.enemies !== false, dungeonParams: options.dungeonParams || null },
     tick: 0, // nombre de pas de simulation écoulés (60 par seconde)
-    status: 'playing', // 'playing' ou 'dead'
+    status: 'playing', // 'playing', 'choosing' (écran de Charon) ou 'dead'
     floorIndex: 0, // étage actuel (0 = premier)
     kills: 0,
+    gold: 0, // oboles
+    offer: null, // écran de Charon : { boons: [ids], rerolls } ou null
     // Générateur de la partie (combats, butin…).
     // La génération des étages a ses propres générateurs dérivés de la graine.
     rng: createRng(`${seed}/partie`),
@@ -42,11 +44,15 @@ export function createGameState(seed, options = {}) {
       dashZ: 0,
       dashHeld: false, // bouton d'esquive déjà enfoncé au pas précédent (une esquive par appui)
       invuln: 0, // invulnérabilité restante
+      boons: {}, // bienfaits possédés : { id: nombre }
+      killsSinceHeal: 0, // pour le Tribut d'Hadès
     },
     enemies: [],
     projectiles: [],
     // Salle verrouillée en cours : { roomId, doors, enemyIds } ou null
     lock: null,
+    pickups: [], // objets au sol : { id, kind: 'obol' | 'potion', x, z, amount }
+    chests: [], // coffres : { id, x, z, opened }
     // Ce qui s'est passé pendant le DERNIER pas (coups, morts…), pour que le rendu
     // affiche des effets. Vidé à chaque pas : ce n'est pas une mémoire de la partie.
     events: [],
@@ -70,6 +76,11 @@ export function enterFloor(state, floorIndex) {
   state.projectiles = [];
   state.enemies = [];
   state.lock = null;
+  state.pickups = [];
+  // Un coffre au centre de chaque salle au trésor
+  state.chests = state.dungeon.rooms
+    .filter((r) => r.type === 'treasure')
+    .map((r) => ({ id: state.nextId++, x: r.x + Math.floor(r.w / 2) + 0.5, z: r.y + Math.floor(r.h / 2) + 0.5, opened: false }));
   if (state.options.enemies) {
     for (const e of populateFloor(state.dungeon, state.seed, floorIndex)) {
       state.enemies.push(createEnemy(state, e));

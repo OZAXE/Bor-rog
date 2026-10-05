@@ -11,6 +11,7 @@
 import { TILE, isWalkable, tileAt } from '../dungeon/tiles.js';
 import { pushOut } from './collision.js';
 import { SIM } from './simConfig.js';
+import { dropRoomReward } from './loot.js';
 
 export function updateRooms(state) {
   if (state.lock) {
@@ -64,6 +65,7 @@ function unlock(state) {
   room.cleared = true;
   state.lock = null;
   state.events.push({ type: 'roomCleared', roomId, doors });
+  dropRoomReward(state, room);
 }
 
 // Salle dans laquelle le héros est VRAIMENT entré : au moins une case entière
