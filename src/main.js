@@ -14,6 +14,10 @@ import { createPlayerView } from './render/playerView.js';
 import { createEnemyViews, createProjectileView } from './render/enemyViews.js';
 import { createEffects } from './render/effects.js';
 import { createGateView } from './render/gateView.js';
+import { createLootView } from './render/lootView.js';
+import { BOONS } from './systems/boons.js';
+import { rerollCost } from './systems/descent.js';
+import { SIM } from './systems/simConfig.js';
 import { createInput } from './controls/input.js';
 
 // ---------------------------------------------------------------------------
@@ -76,6 +80,7 @@ const enemyViews = createEnemyViews(scene, textures.toon, cam.camera.quaternion)
 const projectileView = createProjectileView(scene);
 const effects = createEffects(scene, textures.halo);
 const gateView = createGateView(scene, textures.halo);
+const lootView = createLootView(scene, textures.toon, textures.halo);
 
 // ---- Entrées ----
 const input = createInput(canvas);
@@ -162,11 +167,20 @@ function showSeed() {
   window.history.replaceState(null, '', url);
 }
 
+let lastBoonKey = '';
 function updateHud() {
   const p = state.player;
   healthFill.style.width = `${(100 * p.hp) / p.maxHp}%`;
   healthText.textContent = `${p.hp} / ${p.maxHp}`;
   $('kills').textContent = `${state.kills} vaincu${state.kills > 1 ? 's' : ''}`;
+  $('gold').textContent = `${state.gold} obole${state.gold > 1 ? 's' : ''}`;
+  const boonKey = JSON.stringify(p.boons);
+  if (boonKey !== lastBoonKey) {
+    lastBoonKey = boonKey;
+    $('boon-list').innerHTML = Object.entries(p.boons)
+      .map(([id, n]) => `<span>${BOONS[id].name}${n > 1 ? ` ×${n}` : ''}</span>`)
+      .join('');
+  }
   // Salle verrouillée : nombre d'ennemis encore à vaincre
   const lockEl = $('lock-info');
   if (state.lock) {
@@ -177,12 +191,68 @@ function updateHud() {
   } else lockEl.classList.remove('on');
 }
 
+// ---- Écran de Charon (choix d'un bienfait) ----
+// Les clics ne modifient pas l'état directement : ils deviennent une intention,
+// envoyée à la simulation au pas suivant (comme le reste des contrôles)
+let pendingAction = null;
+let charonKey = '';
+const charon = $('charon');
+function updateCharon() {
+  const open = state.status === 'choosing';
+  charon.classList.toggle('hidden', !open);
+  if (!open) {
+    charonKey = '';
+    return;
+  }
+  const key = JSON.stringify([state.offer.boons, state.offer.rerolls, state.gold, state.player.hp]);
+  if (key === charonKey) return;
+  charonKey = key;
+  const cards = $('boon-cards');
+  cards.innerHTML = '';
+  state.offer.boons.forEach((id, i) => {
+    const b = BOONS[id];
+    const lvl = state.player.boons[id] || 0;
+    const btn = document.createElement('button');
+    btn.className = 'boon-card';
+    btn.type = 'button';
+    btn.innerHTML = `<b>${b.name}</b><span>${b.text}</span><small>${lvl ? `niveau ${lvl} → ${lvl + 1}` : 'nouveau'}${DEVICE.isMobile ? '' : ` · touche ${i + 1}`}</small>`;
+    btn.addEventListener('click', () => (pendingAction = { choice: i }));
+    cards.appendChild(btn);
+  });
+  if (!state.offer.boons.length) {
+    const btn = document.createElement('button');
+    btn.className = 'boon-card';
+    btn.type = 'button';
+    btn.innerHTML = '<b>Descendre</b><span>Les dieux n\'ont plus rien à t\'offrir</span>';
+    btn.addEventListener('click', () => (pendingAction = { choice: 0 }));
+    cards.appendChild(btn);
+  }
+  const p = state.player;
+  const heal = $('btn-heal');
+  heal.textContent = `Se soigner +${SIM.loot.healAmount} PV · ${SIM.loot.healCost} oboles`;
+  heal.disabled = state.gold < SIM.loot.healCost || p.hp >= p.maxHp;
+  const reroll = $('btn-reroll');
+  reroll.textContent = `Autres bienfaits · ${rerollCost(state)} oboles`;
+  reroll.disabled = state.gold < rerollCost(state);
+  $('charon-gold').textContent = `${state.gold} oboles · ${p.hp} / ${p.maxHp} PV`;
+}
+$('btn-heal').addEventListener('click', () => (pendingAction = { shop: 'heal' }));
+$('btn-reroll').addEventListener('click', () => (pendingAction = { shop: 'reroll' }));
+window.addEventListener('keydown', (e) => {
+  if (state.status !== 'choosing') return;
+  const n = ['Digit1', 'Digit2', 'Digit3', 'Numpad1', 'Numpad2', 'Numpad3'].indexOf(e.code);
+  if (n >= 0) pendingAction = { choice: n % 3 };
+  if (e.code === 'KeyH') pendingAction = { shop: 'heal' };
+  if (e.code === 'KeyR') pendingAction = { shop: 'reroll' };
+});
+
 // ---- Mort et nouvelle partie ----
 let deathTimer = 0;
 function showDeath() {
   const n = state.floorIndex + 1;
   $('death-text').innerHTML =
-    `Étage ${n} · ${state.kills} ennemi${state.kills > 1 ? 's' : ''} vaincu${state.kills > 1 ? 's' : ''}<br>` +
+    `Étage ${n} · ${state.kills} ennemi${state.kills > 1 ? 's' : ''} vaincu${state.kills > 1 ? 's' : ''} · ${state.gold} oboles<br>` +
+    `${Object.keys(state.player.boons).length ? `Bienfaits : ${Object.entries(state.player.boons).map(([id, k]) => BOONS[id].name + (k > 1 ? ` ×${k}` : '')).join(', ')}<br>` : ''}` +
     `<small>Graine ${seed}</small>`;
   deathScreen.classList.remove('hidden');
 }
@@ -196,6 +266,7 @@ function restart(newSeed) {
   prev.facing = state.player.facing;
   prevEnemies.clear();
   gateView.reset();
+  pendingAction = null;
   showSeed();
   rebuildFloor();
   updateHud();
@@ -226,7 +297,12 @@ function tick() {
   prev.z = state.player.z;
   prev.facing = state.player.facing;
   for (const e of state.enemies) prevEnemies.set(e.id, { x: e.x, z: e.z });
-  stepGame(state, playing ? input.getIntent(cam.screenToWorld, aimFromMouse) : EMPTY_INTENT);
+  let intent = EMPTY_INTENT;
+  if (state.status === 'choosing') {
+    intent = pendingAction || EMPTY_INTENT;
+    pendingAction = null;
+  } else if (playing) intent = input.getIntent(cam.screenToWorld, aimFromMouse);
+  stepGame(state, intent);
   for (const ev of state.events) {
     effects.handle(ev);
     if (ev.type === 'roomLocked') showBanner('Salle scellée', 'danger');
@@ -250,7 +326,7 @@ function frame(timestamp) {
   const dt = timer.getDelta();
   const time = timer.getElapsed();
 
-  const alpha = playing && state.status === 'playing' ? loop.advance(dt, tick) : 1;
+  const alpha = playing && state.status !== 'dead' ? loop.advance(dt, tick) : 1;
 
   // Changement d'étage : on reconstruit le décor et on n'interpole pas (téléportation)
   if (state.floorIndex !== viewFloor) {
@@ -280,6 +356,8 @@ function frame(timestamp) {
   projectileView.update(state.projectiles, 1 - alpha, STEP);
   effects.update(dt);
   gateView.update(state, dt, time);
+  lootView.update(state, time, dt);
+  updateCharon();
 
   const shake = effects.shakeOffset();
   cam.follow(x + shake.x, z + shake.z);

@@ -38,6 +38,8 @@
           <span id="health-text"></span>
         </div>
         <div id="kills"></div>
+        <div id="gold"></div>
+        <div id="boon-list"></div>
         <div id="lock-info"></div>
         <!-- Voile rouge bref quand le héros est touché -->
         <div id="hurt-flash"></div>
@@ -49,6 +51,18 @@
         <div id="joystick-base"><div id="joystick-knob"></div></div>
         <button id="btn-attack" class="touch-btn" type="button">Frapper</button>
         <button id="btn-dash" class="touch-btn" type="button">Esquiver</button>
+      </div>
+
+      <!-- Écran de Charon : choix d'un bienfait entre deux étages -->
+      <div id="charon" class="hidden">
+        <h2>Charon, le passeur</h2>
+        <p class="hint">Choisis un bienfait des dieux pour descendre</p>
+        <div id="boon-cards"></div>
+        <div class="shop">
+          <button id="btn-heal" type="button"></button>
+          <button id="btn-reroll" type="button"></button>
+        </div>
+        <p id="charon-gold"></p>
       </div>
 
       <!-- Écran de mort -->

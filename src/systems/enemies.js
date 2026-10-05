@@ -117,12 +117,14 @@ function archerBrain(state, e, cfg, dx, dz, dist, ctx) {
       }
       const ux = dx / (dist || 1);
       const uz = dz / (dist || 1);
-      // Trop près : recule. Trop loin ou caché : s'approche. Sinon : reste en place.
-      if (dist < cfg.preferMin) return { mvx: -ux * cfg.speed, mvz: -uz * cfg.speed };
-      if (dist > cfg.preferMax || !sees) {
+      // Caché (pilier, angle) : il se replace d'abord pour retrouver une ligne de tir,
+      // même s'il est proche ; sinon il resterait tapi derrière l'obstacle sans tirer.
+      // Ensuite : trop près, il recule ; trop loin, il s'approche ; sinon il reste en place.
+      if (!sees || dist > cfg.preferMax) {
         const dir = approachDir(state, e, cfg, ctx);
         return { mvx: dir.x * cfg.speed, mvz: dir.z * cfg.speed };
       }
+      if (dist < cfg.preferMin) return { mvx: -ux * cfg.speed, mvz: -uz * cfg.speed };
       return { mvx: 0, mvz: 0 };
     }
     case 'windup': {

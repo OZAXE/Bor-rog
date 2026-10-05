@@ -222,6 +222,22 @@ test('un ennemi contourne un pilier au lieu de rester coincé derrière', () => 
   }
 });
 
+test("un archer caché derrière un pilier, même tout près, se replace et finit par tirer", () => {
+  const s = arena();
+  // Archer collé au mur nord, pilier entre lui et le héros, à 3 m (moins que sa distance préférée)
+  s.dungeon.tiles[2 * 22 + 11] = TILE.PILLAR;
+  s.player.x = 11.5;
+  s.player.z = 4.3;
+  s.player.invuln = 99999;
+  addEnemy(s, 'archer', 11.5, 1.35, { alert: true, mode: 'chase', shotCooldown: 0 });
+  let shots = 0;
+  for (let i = 0; i < 60 * 5; i++) {
+    stepGame(s, {});
+    shots += s.events.filter((e) => e.type === 'shoot').length;
+  }
+  assert.ok(shots > 0, "l'archer est resté caché sans tirer");
+});
+
 test("un ennemi ne repère pas le héros à travers un mur", () => {
   const s = arena();
   for (let c = 1; c < 21; c++) s.dungeon.tiles[13 * 22 + c] = TILE.WALL; // mur horizontal

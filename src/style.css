@@ -196,6 +196,131 @@ body {
   transition: none;
 }
 
+#gold {
+  position: absolute;
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(36px + env(safe-area-inset-bottom));
+  font-size: 15px;
+  color: var(--accent);
+  text-shadow: 0 1px 2px #000;
+}
+
+/* Bienfaits possédés : petites pastilles sous la vie */
+#boon-list {
+  position: absolute;
+  left: calc(14px + env(safe-area-inset-left));
+  bottom: calc(38px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 50vw;
+}
+
+#boon-list span {
+  font-size: 11px;
+  padding: 2px 6px;
+  border: 1px solid rgba(242, 201, 107, 0.5);
+  background: rgba(5, 8, 10, 0.6);
+  color: var(--texte);
+}
+
+/* ---------- Écran de Charon ---------- */
+#charon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  background: radial-gradient(ellipse at center, rgba(10, 40, 30, 0.85), rgba(5, 8, 10, 0.95));
+  overflow-y: auto;
+}
+
+#charon.hidden {
+  display: none;
+}
+
+#charon h2 {
+  margin: 0;
+  font-size: clamp(26px, 6vw, 40px);
+  letter-spacing: 3px;
+  color: var(--spectral);
+}
+
+#charon .hint {
+  margin: 0;
+  opacity: 0.8;
+}
+
+#boon-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.boon-card {
+  width: clamp(150px, 26vw, 210px);
+  min-height: 120px;
+  padding: 14px 12px;
+  font: 14px/1.4 var(--antique);
+  color: var(--texte);
+  background: linear-gradient(#14231f, #0a1210);
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 2px #05080a, 0 0 18px rgba(242, 201, 107, 0.15);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.boon-card:hover,
+.boon-card:focus-visible {
+  border-color: #fff1c4;
+  box-shadow: 0 0 0 2px #05080a, 0 0 26px rgba(242, 201, 107, 0.4);
+}
+
+.boon-card b {
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.boon-card small {
+  opacity: 0.6;
+}
+
+#charon .shop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+#charon .shop button {
+  font: 600 13px var(--antique);
+  padding: 10px 14px;
+  color: var(--accent);
+  background: transparent;
+  border: 2px solid #8a6a2c;
+  cursor: pointer;
+}
+
+#charon .shop button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+#charon-gold {
+  margin: 0;
+  color: var(--accent);
+}
+
 /* ---------- Écran de mort ---------- */
 #death-screen {
   position: absolute;
@@ -391,5 +516,16 @@ body {
   #kills {
     bottom: auto;
     top: calc(52px + env(safe-area-inset-top));
+  }
+  #gold {
+    bottom: auto;
+    top: calc(74px + env(safe-area-inset-top));
+  }
+  #boon-list {
+    bottom: auto;
+    top: calc(34px + env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    justify-content: center;
   }
 }

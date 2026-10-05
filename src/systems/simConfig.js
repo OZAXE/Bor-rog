@@ -84,6 +84,30 @@ export const SIM = {
   },
 };
 
+// Butin et économie (oboles = la monnaie que l'on payait au passeur Charon)
+SIM.loot = {
+  pickupRadius: 0.55, // distance de ramassage (m)
+  magnetRadius: 2.2, // les oboles sont attirées vers le héros dans ce rayon (m)
+  magnetSpeed: 7, // m/s
+  potionHeal: 3,
+  // Ce que lâche un ennemi vaincu
+  enemyObolChance: 0.55,
+  enemyObols: [1, 3],
+  enemyPotionChance: 0.07,
+  // Récompense au centre d'une salle purifiée
+  roomObols: [4, 9],
+  roomPotionChance: 0.3,
+  // Coffre d'une salle au trésor
+  chestObols: [12, 22],
+  chestPotionChance: 0.7,
+  // Chez Charon, entre deux étages
+  healCost: 15,
+  healAmount: 4,
+  rerollCost: 8, // puis +4 à chaque relance sur le même écran
+  rerollCostStep: 4,
+  boonChoices: 3,
+};
+
 // Convertit une durée en secondes en nombre de pas de simulation
 export function ticks(seconds) {
   return Math.round(seconds * SIM.tickRate);

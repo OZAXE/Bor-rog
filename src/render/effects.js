@@ -107,6 +107,16 @@ export function createEffects(scene, haloTexture) {
         case 'arrowBreak':
           burst(ev.x, 0.7, ev.z, 5, 0xffd27a, 1.5, 0.2);
           break;
+        case 'pickup':
+          burst(ev.x, 0.4, ev.z, ev.kind === 'obol' ? 4 : 10, ev.kind === 'obol' ? 0xf2c96b : 0xff5a6a, 1.2, 0.35);
+          break;
+        case 'chestOpened':
+          burst(ev.x, 0.5, ev.z, 24, 0xf2c96b, 2.5, 0.7);
+          shake = Math.max(shake, 0.05);
+          break;
+        case 'heal':
+          burst(ev.x, 1.1, ev.z, 8, 0x5dffa0, 1, 0.5);
+          break;
         case 'roomCleared':
           // Les grilles se dissipent en étincelles vertes
           for (const d of ev.doors) burst(d.c + 0.5, 0.8, d.r + 0.5, 4, 0x2fff86, 1.5, 0.7);
