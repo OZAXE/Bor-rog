@@ -23,7 +23,11 @@ export const PALETTE = {
 
 const CELL = ATLAS.size / ATLAS.grid;
 
-export function createAtlasTexture() {
+// Palette en cours de dessin (chaque zone a la sienne, cf. src/render/zoneThemes.js)
+let P = PALETTE;
+
+export function createAtlasTexture(palette = PALETTE) {
+  P = palette;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = ATLAS.size;
   const g = canvas.getContext('2d');
@@ -80,7 +84,7 @@ function cellOrigin([col, row]) {
 function drawFloor(g, o, rng, variant) {
   g.save();
   g.translate(o.x, o.y);
-  g.fillStyle = PALETTE.ink;
+  g.fillStyle = P.ink;
   g.fillRect(0, 0, CELL, CELL);
 
   const half = CELL / 2;
@@ -90,10 +94,10 @@ function drawFloor(g, o, rng, variant) {
       const x = tx * half + joint / 2;
       const y = ty * half + joint / 2;
       const s = half - joint;
-      g.fillStyle = PALETTE.floor[(variant + tx + ty * 2) % PALETTE.floor.length];
+      g.fillStyle = P.floor[(variant + tx + ty * 2) % P.floor.length];
       g.fillRect(x, y, s, s);
       // Biseau : arête claire en haut à gauche, sombre en bas à droite
-      g.fillStyle = PALETTE.floorLight;
+      g.fillStyle = P.floorLight;
       g.fillRect(x, y, s, 3);
       g.fillRect(x, y, 3, s);
       g.fillStyle = 'rgba(0,0,0,0.25)';
@@ -123,7 +127,7 @@ function drawFloor(g, o, rng, variant) {
 
   // Variante rare : rosace gravée qui luit faiblement
   if (variant === 3) {
-    g.strokeStyle = PALETTE.engraving;
+    g.strokeStyle = P.engraving;
     g.lineWidth = 3;
     const c = CELL / 2;
     g.beginPath();
@@ -148,16 +152,16 @@ function drawFloor(g, o, rng, variant) {
 function drawWallFace(g, o, rng) {
   g.save();
   g.translate(o.x, o.y);
-  g.fillStyle = PALETTE.ink;
+  g.fillStyle = P.ink;
   g.fillRect(0, 0, CELL, CELL);
 
   // La face fait 1,8 m de haut pour 1 m de large : la case est étirée verticalement
   // à l'affichage, donc on dessine des blocs "écrasés" qui reprendront leurs proportions.
   const bandH = CELL * 0.2;
   // Frise : bandeau sombre + méandre clair
-  g.fillStyle = PALETTE.friezeBand;
+  g.fillStyle = P.friezeBand;
   g.fillRect(0, 0, CELL, bandH);
-  g.fillStyle = PALETTE.frieze;
+  g.fillStyle = P.frieze;
   g.fillRect(0, 2, CELL, 3);
   g.fillRect(0, bandH - 5, CELL, 3);
   drawMeander(g, 0, 9, CELL, bandH - 18, 4);
@@ -169,7 +173,7 @@ function drawWallFace(g, o, rng) {
     const y = bandH + k * rowH;
     const offset = k % 2 === 0 ? 0 : CELL / 4;
     for (let x = -CELL / 2 + offset; x < CELL; x += CELL / 2) {
-      g.fillStyle = k % 2 ? PALETTE.wall : '#22333a';
+      g.fillStyle = k % 2 ? P.wall : '#22333a';
       g.fillRect(x + 2, y + 2, CELL / 2 - 4, rowH - 4);
       g.fillStyle = 'rgba(160, 220, 210, 0.08)';
       g.fillRect(x + 2, y + 2, CELL / 2 - 4, 2);
@@ -183,9 +187,9 @@ function drawWallFace(g, o, rng) {
 function drawWallTop(g, o, rng) {
   g.save();
   g.translate(o.x, o.y);
-  g.fillStyle = PALETTE.ink;
+  g.fillStyle = P.ink;
   g.fillRect(0, 0, CELL, CELL);
-  g.fillStyle = PALETTE.top;
+  g.fillStyle = P.top;
   g.fillRect(6, 6, CELL - 12, CELL - 12);
   g.fillStyle = 'rgba(200, 255, 240, 0.10)';
   g.fillRect(6, 6, CELL - 12, 4);
@@ -196,7 +200,7 @@ function drawWallTop(g, o, rng) {
 // Méandre grec (motif "à la grecque") répété sur la largeur
 function drawMeander(g, x0, y0, width, h, units) {
   const u = width / units;
-  g.strokeStyle = PALETTE.frieze;
+  g.strokeStyle = P.frieze;
   g.lineWidth = Math.max(2, h * 0.11);
   g.lineCap = 'square';
   for (let k = 0; k < units; k++) {

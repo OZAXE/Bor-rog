@@ -80,3 +80,10 @@ export function updateLoot(state, dt) {
     return true;
   });
 }
+
+// Trésor d'un boss vaincu : beaucoup d'oboles et des potions
+export function dropBossReward(state, boss) {
+  const r = SIM.bosses[boss.type].reward;
+  spawnObols(state, boss.x, boss.z, nextInt(state.rng, ...r.obols));
+  for (let k = 0; k < r.potions; k++) spawnPickup(state, 'potion', boss.x, boss.z);
+}

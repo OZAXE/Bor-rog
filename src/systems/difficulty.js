@@ -47,6 +47,8 @@ export function floorScaling(floorIndex) {
 // Caractéristiques effectives d'un ennemi
 export function enemyStats(type, floorIndex, elite = false) {
   const base = SIM.enemies[type];
+  // Un boss a des valeurs fixes (il n'apparaît qu'à son propre étage)
+  if (base.boss) return { hp: base.hp, speed: base.speed, windup: 0, recover: 0 };
   const k = floorScaling(floorIndex);
   const e = DIFFICULTY.elite;
   const hpMul = k.hp * (elite ? e.hpFactor : 1);

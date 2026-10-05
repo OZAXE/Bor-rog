@@ -33,6 +33,7 @@ export function createDungeonView(scene, dungeon, shared, cameraQuat) {
   const m = buildDungeonMesh(dungeon, {
     tallHeight: cfg.wallHeight,
     lowHeight: cfg.lowWallHeight,
+    glowColor: shared.glowColor,
   });
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(m.positions, 3));
@@ -90,7 +91,7 @@ export function createDungeonView(scene, dungeon, shared, cameraQuat) {
     quat.setFromAxisAngle(UP, d.angle);
     const s = 0.7 + (d.angle % 1) * 0.6;
     debrisMesh.setMatrixAt(i, matrix.compose(pos.set(d.x, 0.05 * s, d.z), quat, scale.set(s, s, s)));
-    debrisMesh.setColorAt(i, color.set(CONFIG.dungeon.colors.debris).offsetHSL(0, 0, (d.angle % 0.5) * 0.08));
+    debrisMesh.setColorAt(i, color.set(shared.debrisColor).offsetHSL(0, 0, (d.angle % 0.5) * 0.08));
   });
   scale.set(1, 1, 1);
   quat.identity();
@@ -151,10 +152,11 @@ export function createDungeonView(scene, dungeon, shared, cameraQuat) {
   };
 }
 
-// Ressources communes à tous les étages : créées une seule fois
-export function createDungeonResources(textures) {
+// Ressources communes à tous les étages d'une même zone : créées une fois par zone.
+// theme : ambiance de la zone (cf. src/render/zoneThemes.js)
+export function createDungeonResources(textures, theme) {
   const cfg = CONFIG.dungeon;
-  const col = cfg.colors;
+  const col = { ...cfg.colors, ...theme.colors };
 
   // Colonne : base + fût cannelé (12 faces) + chapiteau
   const base = new THREE.BoxGeometry(0.8, 0.16, 0.8).translate(0, 0.08, 0);
@@ -186,6 +188,8 @@ export function createDungeonResources(textures) {
     });
 
   return {
+    glowColor: theme.glowColor,
+    debrisColor: col.debris,
     decorMaterial: new THREE.MeshLambertMaterial({ map: textures.atlas, vertexColors: true }),
     columnGeometry,
     columnOutlineGeometry,

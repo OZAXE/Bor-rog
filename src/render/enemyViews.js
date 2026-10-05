@@ -46,6 +46,35 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
     furyBody: new THREE.ConeGeometry(0.26, 0.8, 8).translate(0, 0.45, 0),
     wing: new THREE.PlaneGeometry(0.55, 0.32).translate(0.3, 0, 0),
     aura: new THREE.RingGeometry(0.42, 0.56, 24).rotateX(-Math.PI / 2),
+    // ---------- Cerbère ----------
+    dogTorso: new THREE.CapsuleGeometry(0.48, 0.75, 4, 10).rotateX(Math.PI / 2), // corps allongé
+    dogBelly: new THREE.SphereGeometry(0.5, 10, 8),
+    dogLeg: new THREE.BoxGeometry(0.22, 0.6, 0.22),
+    dogHead: new THREE.SphereGeometry(0.3, 10, 8),
+    dogSnout: new THREE.BoxGeometry(0.2, 0.18, 0.3),
+    collar: new THREE.TorusGeometry(0.62, 0.07, 6, 16),
+    spike: new THREE.ConeGeometry(0.06, 0.2, 5),
+    bossCharge: new THREE.PlaneGeometry(1.7, SIM.bosses.cerberus.charge.maxDistance)
+      .rotateX(-Math.PI / 2)
+      .translate(0, 0, SIM.bosses.cerberus.charge.maxDistance / 2),
+    bossBite: new THREE.RingGeometry(
+      0.5,
+      SIM.bosses.cerberus.bite.range,
+      18,
+      1,
+      -Math.PI / 2 - SIM.bosses.cerberus.bite.arc / 2,
+      SIM.bosses.cerberus.bite.arc,
+    ).rotateX(-Math.PI / 2),
+    breathCone: (offset) =>
+      new THREE.RingGeometry(
+        0.6,
+        SIM.bosses.cerberus.breath.range,
+        14,
+        1,
+        -Math.PI / 2 - SIM.bosses.cerberus.breath.coneArc / 2 - offset,
+        SIM.bosses.cerberus.breath.coneArc,
+      ).rotateX(-Math.PI / 2),
+    howlRing: new THREE.RingGeometry(1.0, 1.25, 32).rotateX(-Math.PI / 2),
     hpBack: new THREE.PlaneGeometry(0.7, 0.09),
     hpFill: new THREE.PlaneGeometry(0.7, 0.09).translate(0.35, 0, 0),
   };
@@ -77,6 +106,35 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
     return mesh;
   }
 
+  // Modèle de Cerbère : corps massif, quatre pattes, trois têtes, collier à pointes
+  function buildCerberus(body, toon) {
+    const fur = toon(0x3d3238);
+    const torso = part(body, geo.dogTorso, fur, 0, 0.85, -0.1);
+    torso.rotation.x = -0.12;
+    // Poitrail plus massif à l'avant
+    part(body, geo.dogBelly, fur, 0, 0.95, 0.35, false);
+    for (const [x, z] of [[-0.35, 0.45], [0.35, 0.45], [-0.35, -0.6], [0.35, -0.6]]) part(body, geo.dogLeg, fur, x, 0.3, z);
+    const heads = [];
+    for (const x of [-0.42, 0, 0.42]) {
+      const head = part(body, geo.dogHead, fur, x, 1.3 + (x === 0 ? 0.12 : 0), 0.75);
+      part(head, geo.dogSnout, fur, 0, -0.05, 0.3, false);
+      part(head, geo.eye, eyeMat, -0.1, 0.07, 0.24, false);
+      part(head, geo.eye, eyeMat, 0.1, 0.07, 0.24, false);
+      heads.push(head);
+    }
+    const collarMat = toon(0x8a6a2c);
+    const collar = part(body, geo.collar, collarMat, 0, 1.1, 0.5, false);
+    collar.rotation.x = Math.PI / 2 - 0.3;
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      const sp = new THREE.Mesh(geo.spike, collarMat);
+      sp.position.set(Math.cos(a) * 0.66, Math.sin(a) * 0.66, 0);
+      sp.rotation.z = a - Math.PI / 2;
+      collar.add(sp);
+    }
+    body.userData.heads = heads;
+  }
+
   function createView(e) {
     const root = new THREE.Group();
     const body = new THREE.Group(); // tourne avec l'ennemi
@@ -96,6 +154,8 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
       part(body, geo.shadeHead, toon(0x2a1a40), 0, 1.0, 0);
       part(body, geo.eye, eyeMat, -0.07, 1.03, 0.16, false);
       part(body, geo.eye, eyeMat, 0.07, 1.03, 0.16, false);
+    } else if (e.type === 'cerberus') {
+      buildCerberus(body, toon);
     } else if (e.type === 'fury') {
       part(body, geo.furyBody, toon(0x8c1d3c), 0, 0.1, 0);
       part(body, geo.shadeHead, toon(0x5a1028), 0, 1.0, 0);
@@ -130,8 +190,30 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
     }
 
     // Marquage d'attaque (invisible hors préparation)
-    const warnGeo = e.type === 'shade' ? geo.strike : e.type === 'fury' ? geo.chargeLine : geo.aimLine;
-    const warn = new THREE.Mesh(warnGeo, warnMat());
+    let warn;
+    let bossWarns = null;
+    if (e.boss) {
+      // Un boss a plusieurs attaques : un marquage par attaque, un seul visible à la fois
+      const g = new THREE.Group();
+      const breath = new THREE.Group();
+      for (const a of SIM.bosses.cerberus.breath.angles) breath.add(new THREE.Mesh(geo.breathCone(a), warnMat()));
+      const howlMat = warnMat();
+      howlMat.color.set(0x2fff86);
+      bossWarns = {
+        charge: new THREE.Mesh(geo.bossCharge, warnMat()),
+        bite: new THREE.Mesh(geo.bossBite, warnMat()),
+        breath,
+        howl: new THREE.Mesh(geo.howlRing, howlMat),
+      };
+      for (const m of Object.values(bossWarns)) {
+        m.visible = false;
+        g.add(m);
+      }
+      warn = g;
+    } else {
+      const warnGeo = e.type === 'shade' ? geo.strike : e.type === 'fury' ? geo.chargeLine : geo.aimLine;
+      warn = new THREE.Mesh(warnGeo, warnMat());
+    }
     warn.position.y = 0.03;
     root.add(warn);
 
@@ -149,10 +231,12 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
     root.add(hp);
 
     scene.add(root);
-    return { root, body, mats, warn, hp, fill, type: e.type, scale: e.elite ? 1.22 : 1 };
+    if (e.boss) hp.visible = false; // la vie du boss s'affiche en haut de l'écran
+    return { root, body, mats, warn, bossWarns, hp, fill, type: e.type, boss: e.boss, scale: e.elite ? 1.22 : 1 };
   }
 
   const white = new THREE.Color(0xffffff);
+  const spectral = new THREE.Color(0x2fff86);
 
   return {
     // positions : Map id -> { x, z } interpolées par main.js
@@ -169,7 +253,7 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
         v.root.position.set(pos.x, 0, pos.z);
         v.body.rotation.y = e.facing;
         // L'Ombre et la Furie flottent ; le squelette reste au sol
-        v.body.position.y = e.type === 'archer' ? 0 : 0.12 + Math.sin(time * 3 + e.id) * 0.05;
+        v.body.position.y = e.type === 'archer' || e.boss ? 0 : 0.12 + Math.sin(time * 3 + e.id) * 0.05;
         if (v.body.userData.wings) {
           // Battement d'ailes, frénétique pendant la charge
           const speed = e.mode === 'charge' ? 30 : 9;
@@ -181,6 +265,29 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
         // Clignotement blanc quand il est touché
         const flash = e.hitFlash > 0 ? 0.85 : 0;
         for (const m of v.mats) m.color.copy(m.userData.base).lerp(white, flash);
+
+        // Boss : le marquage de l'attaque annoncée, de plus en plus net jusqu'au coup
+        if (v.bossWarns) {
+          for (const [kind, m] of Object.entries(v.bossWarns)) m.visible = e.mode === 'windup' && e.attack === kind;
+          if (e.mode === 'windup') {
+            const k = 1 - e.timer / (e.windupTotal || 1);
+            v.warn.rotation.y = Math.atan2(e.aimX, e.aimZ);
+            v.warn.traverse((o) => {
+              if (o.material && o.material.opacity !== undefined && o.isMesh) o.material.opacity = 0.15 + 0.55 * k;
+            });
+            if (e.attack === 'howl') v.bossWarns.howl.scale.setScalar(1 + k * 2.5);
+          }
+          // Sonné (après une charge contre un mur) : il titube
+          v.body.rotation.z = e.mode === 'recover' && e.stunned ? Math.sin(time * 7) * 0.12 : 0;
+          // Touché : éclair blanc. Invulnérable (hurlement) : voile vert spectral
+          for (const m of v.mats) {
+            m.color.copy(m.userData.base);
+            if (e.hitFlash > 0) m.color.lerp(white, 0.6);
+            else if (e.invulnerable) m.color.lerp(spectral, 0.35);
+          }
+          v.hp.visible = false;
+          continue;
+        }
 
         // Préparation : le marquage rouge s'intensifie jusqu'au coup
         if (e.mode === 'windup') {
@@ -200,12 +307,15 @@ export function createEnemyViews(scene, gradientMap, cameraQuat) {
         v.hp.visible = e.hp < e.maxHp;
         v.fill.scale.x = Math.max(0.001, e.hp / e.maxHp);
       }
-      // Ennemis disparus (vaincus ou changement d'étage) : on retire leur vue
+      // Ennemis disparus (vaincus ou changement d'étage) : on retire leur vue et on
+      // libère les matériaux qui lui sont propres (les géométries sont partagées)
       for (const [id, v] of views) {
         if (alive.has(id)) continue;
         scene.remove(v.root);
         v.mats.forEach((m) => m.dispose());
-        v.warn.material.dispose();
+        v.warn.traverse((o) => {
+          if (o.isMesh) o.material.dispose();
+        });
         v.fill.material.dispose();
         views.delete(id);
       }

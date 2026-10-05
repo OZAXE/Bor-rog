@@ -4,7 +4,7 @@ import { SIM, ticks } from './simConfig.js';
 import { moveCircle } from './collision.js';
 import { hasLineOfSight, facingOf, dirOf, inArc, angleBetween } from './geometry.js';
 import { playerStats } from './boons.js';
-import { dropFromEnemy } from './loot.js';
+import { dropFromEnemy, dropBossReward } from './loot.js';
 
 export function updatePlayer(state, intent, dt) {
   const p = state.player;
@@ -88,24 +88,44 @@ function resolvePlayerHit(state) {
     const r = SIM.enemies[e.type].radius;
     if (!inArc(p.x, p.z, p.facing, st.attackRange, a.arc, e.x, e.z, r)) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
+    if (e.invulnerable) {
+      state.events.push({ type: 'deflect', id: e.id, x: e.x, z: e.z });
+      continue;
+    }
     e.hp -= st.damage;
     e.hitFlash = ticks(0.12);
     e.alert = true;
-    // Recul dans l'axe du coup : éloigne l'ennemi et interrompt sa préparation
-    e.kvx = dir.x * a.knockback;
-    e.kvz = dir.z * a.knockback;
-    if (e.mode === 'windup') {
-      e.mode = 'recover';
-      e.timer = ticks(0.35);
+    // Recul dans l'axe du coup : éloigne l'ennemi et interrompt sa préparation.
+    // Un boss, lui, ne recule pas et ne se laisse pas interrompre.
+    if (!e.boss) {
+      e.kvx = dir.x * a.knockback;
+      e.kvz = dir.z * a.knockback;
+      if (e.mode === 'windup') {
+        e.mode = 'recover';
+        e.timer = ticks(0.35);
+      }
     }
     state.events.push({ type: 'hit', id: e.id, x: e.x, z: e.z });
+  }
+  // Boss vaincu : ses serviteurs se dissipent avec lui
+  const deadBoss = state.enemies.find((e) => e.boss && e.hp <= 0);
+  if (deadBoss) {
+    for (const e of state.enemies) {
+      if (!e.boss && e.hp > 0) {
+        e.hp = 0;
+        e.noDrop = true;
+      }
+    }
+    state.projectiles = [];
+    state.events.push({ type: 'bossDefeated', id: deadBoss.id, bossType: deadBoss.type, x: deadBoss.x, z: deadBoss.z });
+    dropBossReward(state, deadBoss);
   }
   // Retrait des ennemis vaincus
   const before = state.enemies.length;
   state.enemies = state.enemies.filter((e) => {
     if (e.hp > 0) return true;
-    state.events.push({ type: 'enemyDied', id: e.id, enemyType: e.type, x: e.x, z: e.z });
-    dropFromEnemy(state, e);
+    state.events.push({ type: 'enemyDied', id: e.id, enemyType: e.type, x: e.x, z: e.z, boss: e.boss });
+    if (!e.boss && !e.noDrop) dropFromEnemy(state, e);
     // Tribut d'Hadès : la vie revient au fil des ennemis vaincus
     if (st.killsPerHeal && ++p.killsSinceHeal >= st.killsPerHeal) {
       p.killsSinceHeal = 0;

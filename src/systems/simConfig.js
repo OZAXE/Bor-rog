@@ -85,6 +85,26 @@ export const SIM = {
     },
   },
 
+  // ---------- Boss ----------
+  // Leurs valeurs ne dépendent pas de l'étage (chaque boss a son étage fixe).
+  bosses: {
+    // Cerbère : charges (s'écrase contre murs et colonnes), triple souffle en cônes,
+    // morsure de près ; à 50 % de vie, il hurle, appelle des Ombres et charge deux fois.
+    cerberus: {
+      name: 'Cerbère, gardien des Enfers',
+      radius: 0.85,
+      hp: 150,
+      speed: 2.8,
+      pause: [0.45, 0.9], // temps de marche entre deux attaques (s)
+      keepDistance: 4.5, // pendant la pause, il ne s'approche que si le héros est plus loin
+      charge: { windup: 0.9, speed: 14, maxDistance: 15, damage: 3, recover: 0.7, wallStun: 2.0 },
+      breath: { windup: 0.8, range: 5.5, coneArc: 0.5, angles: [-0.8, 0, 0.8], damage: 3, recover: 0.6 },
+      bite: { trigger: 2.3, windup: 0.45, range: 2.4, arc: 1.75, damage: 2, recover: 0.5 },
+      phase2: { at: 0.5, howl: 1.4, adds: 4, chainWindup: 0.6 },
+      reward: { obols: [28, 40], potions: 1 },
+    },
+  },
+
   // Peuplement des étages
   spawn: {
     basePerRoom: 2, // ennemis par salle de combat au premier étage
@@ -125,6 +145,11 @@ SIM.loot = {
   rerollCostStep: 4,
   boonChoices: 3,
 };
+
+// Les boss sont aussi des "ennemis" pour les collisions et la séparation
+for (const [id, b] of Object.entries(SIM.bosses)) {
+  SIM.enemies[id] = { radius: b.radius, hp: b.hp, speed: b.speed, aggroRange: 0, windup: 0, recover: 0, boss: true };
+}
 
 // Convertit une durée en secondes en nombre de pas de simulation
 export function ticks(seconds) {

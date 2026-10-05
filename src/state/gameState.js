@@ -3,7 +3,8 @@
 // d'envoyer l'état par le réseau ou de sauvegarder une partie.
 
 import { createRng } from '../core/rng.js';
-import { generateFloor } from '../dungeon/generate.js';
+import { generateFloor, generateBossFloor } from '../dungeon/generate.js';
+import { bossOf } from '../dungeon/zones.js';
 import { populateFloor } from '../dungeon/populate.js';
 import { SIM, ticks } from '../systems/simConfig.js';
 import { enemyStats } from '../systems/difficulty.js';
@@ -65,7 +66,10 @@ export function createGameState(seed, options = {}) {
 // Génère l'étage demandé, le peuple et place le joueur au départ
 export function enterFloor(state, floorIndex) {
   state.floorIndex = floorIndex;
-  state.dungeon = generateFloor(state.seed, floorIndex, state.options.dungeonParams || undefined);
+  const boss = bossOf(floorIndex);
+  state.dungeon = boss
+    ? generateBossFloor(state.seed, floorIndex, boss)
+    : generateFloor(state.seed, floorIndex, state.options.dungeonParams || undefined);
   const s = state.dungeon.start;
   const p = state.player;
   p.x = s.c + 0.5;
@@ -89,7 +93,7 @@ export function enterFloor(state, floorIndex) {
   }
 }
 
-export function createEnemy(state, { type, x, z, roomId = -1, firstShotDelay = 0, elite = false }) {
+export function createEnemy(state, { type, x, z, roomId = -1, firstShotDelay = 0, elite = false, boss = false }) {
   // Caractéristiques selon l'étage et le statut d'élite (cf. src/systems/difficulty.js)
   const stats = enemyStats(type, state.floorIndex, elite);
   return {
@@ -101,6 +105,7 @@ export function createEnemy(state, { type, x, z, roomId = -1, firstShotDelay = 0
     kvz: 0,
     facing: 0,
     elite,
+    boss,
     stats,
     hp: stats.hp,
     maxHp: stats.hp,

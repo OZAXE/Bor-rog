@@ -22,7 +22,7 @@ export function updateRooms(state) {
   }
 
   const room = roomAround(state.dungeon, state.player.x, state.player.z);
-  if (!room || room.cleared || (room.type !== 'combat' && room.type !== 'stairs')) return;
+  if (!room || room.cleared || (room.type !== 'combat' && room.type !== 'stairs' && room.type !== 'boss')) return;
 
   const inside = state.enemies.filter((e) => inRoom(room, e.x, e.z));
   if (inside.length === 0) {
@@ -53,6 +53,8 @@ export function updateRooms(state) {
     if (!e.alert) {
       e.alert = true;
       e.mode = 'chase';
+      // Un boss se présente (1,5 s) avant sa première attaque
+      if (e.boss) e.timer = 90;
     }
   }
   state.events.push({ type: 'roomLocked', roomId: room.id, count: inside.length });

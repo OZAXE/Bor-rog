@@ -17,6 +17,7 @@ import { hasLineOfSight, hasClearPath, facingOf, inArc } from './geometry.js';
 import { walkDistances } from '../dungeon/generate.js';
 import { isWalkable, tileAt } from '../dungeon/tiles.js';
 import { hurtPlayer } from './player.js';
+import { cerberusBrain, resolveBossCharge } from './bosses.js';
 
 export function updateEnemies(state, dt) {
   const p = state.player;
@@ -49,7 +50,8 @@ export function updateEnemies(state, dt) {
     if (e.alert && state.status === 'playing') {
       if (e.type === 'shade') ({ mvx, mvz } = shadeBrain(state, e, cfg, dx, dz, dist, ctx));
       else if (e.type === 'archer') ({ mvx, mvz } = archerBrain(state, e, cfg, dx, dz, dist, ctx));
-      else ({ mvx, mvz } = furyBrain(state, e, cfg, dx, dz, dist, ctx));
+      else if (e.type === 'fury') ({ mvx, mvz } = furyBrain(state, e, cfg, dx, dz, dist, ctx));
+      else if (e.type === 'cerberus') ({ mvx, mvz } = cerberusBrain(state, e, cfg, dx, dz, dist, ctx));
     }
 
     // Recul après un coup reçu, qui s'amortit
@@ -66,7 +68,10 @@ export function updateEnemies(state, dt) {
     const moved = Math.hypot(pos.x - e.x, pos.z - e.z);
     e.x = pos.x;
     e.z = pos.z;
-    if (e.mode === 'charge') resolveCharge(state, e, cfg, moved, Math.hypot(mvx, mvz) * dt);
+    if (e.mode === 'charge') {
+      if (e.boss) resolveBossCharge(state, e, moved, Math.hypot(mvx, mvz) * dt);
+      else resolveCharge(state, e, cfg, moved, Math.hypot(mvx, mvz) * dt);
+    }
   }
   separate(state);
 }
@@ -219,7 +224,7 @@ function resolveCharge(state, e, cfg, moved, wanted) {
 // Direction pour s'approcher du héros : tout droit si le passage est libre pour le
 // corps de l'ennemi, sinon vers la case voisine la plus proche du héros en distance
 // de marche (il contourne ainsi piliers et angles au lieu de s'y cogner)
-function approachDir(state, e, cfg, ctx) {
+export function approachDir(state, e, cfg, ctx) {
   const p = state.player;
   const dx = p.x - e.x;
   const dz = p.z - e.z;
@@ -276,8 +281,16 @@ function separate(state) {
     const dz = a.z - p.z;
     const d = Math.hypot(dx, dz);
     if (d < min && d > 0) {
-      push[i].x += (dx / d) * (min - d);
-      push[i].z += (dz / d) * (min - d);
+      if (a.boss) {
+        // Un boss est trop lourd pour être poussé : c'est le héros qui recule
+        const pos = { x: p.x, z: p.z };
+        moveCircle(state.dungeon, pos, (-dx / d) * (min - d), (-dz / d) * (min - d), SIM.player.radius);
+        p.x = pos.x;
+        p.z = pos.z;
+      } else {
+        push[i].x += (dx / d) * (min - d);
+        push[i].z += (dz / d) * (min - d);
+      }
     }
   }
   for (let i = 0; i < list.length; i++) {
