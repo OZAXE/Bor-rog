@@ -47,7 +47,13 @@ export function updateEnemies(state, dt) {
 
     let mvx = 0; // déplacement voulu (m/s)
     let mvz = 0;
-    if (e.alert && state.status === 'playing') {
+    // Ralenti par la Nova : l'ennemi ne pense et ne bouge qu'un pas sur deux
+    let frozen = false;
+    if (e.slow > 0) {
+      e.slow--;
+      frozen = state.tick % 2 === 1;
+    }
+    if (e.alert && state.status === 'playing' && !frozen) {
       if (e.type === 'shade') ({ mvx, mvz } = shadeBrain(state, e, cfg, dx, dz, dist, ctx));
       else if (e.type === 'archer') ({ mvx, mvz } = archerBrain(state, e, cfg, dx, dz, dist, ctx));
       else if (e.type === 'fury') ({ mvx, mvz } = furyBrain(state, e, cfg, dx, dz, dist, ctx));

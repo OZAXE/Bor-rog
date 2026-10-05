@@ -622,8 +622,57 @@ body {
   border-color: rgba(159, 232, 255, 0.6);
 }
 
+/* Capacité spéciale : au-dessus de Frapper ; le disque se remplit pendant la recharge */
+#btn-special {
+  --charge: 1;
+  width: 62px;
+  height: 62px;
+  right: calc(36px + env(safe-area-inset-right));
+  bottom: calc(146px + env(safe-area-inset-bottom));
+  border-color: rgba(185, 160, 255, 0.7);
+  background: conic-gradient(rgba(185, 160, 255, 0.4) calc(var(--charge) * 360deg), rgba(5, 8, 10, 0.45) 0);
+  font-size: 11px;
+}
+
+#btn-special.ready {
+  box-shadow: 0 0 14px rgba(185, 160, 255, 0.6);
+}
+
+/* Capacité spéciale sur PC : nom + touche + jauge de recharge, à côté de la vie */
+#special-hud {
+  position: absolute;
+  left: calc(300px + env(safe-area-inset-left));
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ombre);
+  text-shadow: 0 1px 2px #000;
+}
+
+#special-hud .bar {
+  width: 70px;
+  height: 8px;
+  background: rgba(5, 8, 10, 0.7);
+  border: 1px solid #4a3f7a;
+}
+
+#special-hud .fill {
+  display: block;
+  height: 100%;
+  background: var(--ombre);
+}
+
+#special-hud.ready .fill {
+  background: var(--spectral);
+}
+
 /* Sur mobile, la vie remonte un peu pour ne pas gêner le pouce gauche */
 @media (pointer: coarse) {
+  #special-hud {
+    display: none; /* remplacé par le 3e bouton */
+  }
   #health {
     top: calc(10px + env(safe-area-inset-top));
     bottom: auto;

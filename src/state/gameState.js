@@ -62,7 +62,9 @@ export function createGameState(seed, options = {}) {
       danceHits: [], // Danse des lames : ennemis déjà frappés par l'esquive en cours
       dashX: 0, // direction de l'esquive
       dashZ: 0,
-      dashHeld: false, // bouton d'esquive déjà enfoncé au pas précédent (une esquive par appui)
+      dashHeld: false,
+      specialCooldown: 0, // recharge de la capacité spéciale (pas)
+      specialHeld: false, // bouton déjà enfoncé au pas précédent (une capacité par appui) // bouton d'esquive déjà enfoncé au pas précédent (une esquive par appui)
       invuln: 0, // invulnérabilité restante
       boons: {}, // bienfaits possédés : { id: nombre }
       killsSinceHeal: 0, // pour le Tribut d'Hadès

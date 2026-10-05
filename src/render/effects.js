@@ -29,6 +29,23 @@ export function createEffects(scene, haloTexture) {
   let swingLife = 0;
   const swingDuration = a.duration + 0.06;
 
+  // ---------- Onde des capacités (Tourbillon, Nova) : anneau qui s'étend et s'efface ----------
+  const waveMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const wave = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 48).rotateX(-Math.PI / 2), waveMat);
+  wave.position.y = 0.4;
+  wave.visible = false;
+  scene.add(wave);
+  let waveLife = 0;
+  let waveR = 1;
+  const WAVE_TIME = 0.35;
+
   // ---------- Particules (un seul InstancedMesh) ----------
   const particles = [];
   const pMesh = new THREE.InstancedMesh(
@@ -106,6 +123,23 @@ export function createEffects(scene, haloTexture) {
           // Coup du destin : gerbe dorée et petit tremblement en plus
           if (ev.crit) burst(ev.x, 0.8, ev.z, 14, 0xf2c96b, 3.5, 0.4);
           shake = Math.max(shake, ev.crit ? 0.14 : 0.06);
+          break;
+        case 'special':
+          if (ev.id === 'volley') {
+            burst(ev.x + Math.sin(ev.facing) * 0.6, 0.75, ev.z + Math.cos(ev.facing) * 0.6, 12, 0xeafff2, 2, 0.3);
+            break;
+          }
+          // Tourbillon : onde blanche et gerbe dorée ; Nova : onde de givre et éclats bleus
+          wave.position.x = ev.x;
+          wave.position.z = ev.z;
+          waveMat.color.set(ev.id === 'nova' ? 0x9fd8ff : 0xf4fff8);
+          waveR = ev.r;
+          waveLife = WAVE_TIME;
+          for (let k = 0; k < 18; k++) {
+            const ang = (k / 18) * Math.PI * 2;
+            burst(ev.x + Math.cos(ang) * ev.r * 0.8, 0.6, ev.z + Math.sin(ang) * ev.r * 0.8, 2, ev.id === 'nova' ? 0xbfe6ff : 0xf2c96b, 1.2, 0.4);
+          }
+          shake = Math.max(shake, 0.15);
           break;
         case 'heroShot':
           // Petite gerbe à la sortie de l'arc ou du bâton
@@ -227,6 +261,14 @@ export function createEffects(scene, haloTexture) {
         swingMat.opacity = Math.max(0, swingLife / swingDuration) * 0.9;
         swing.scale.setScalar(1 + (1 - swingLife / swingDuration) * 0.12);
       } else swing.visible = false;
+
+      if (waveLife > 0) {
+        waveLife -= dt;
+        const k = 1 - Math.max(0, waveLife) / WAVE_TIME; // 0 -> 1
+        wave.visible = true;
+        wave.scale.setScalar(0.3 + k * waveR);
+        waveMat.opacity = (1 - k) * 0.85;
+      } else wave.visible = false;
 
       if (puffLife > 0) {
         puffLife -= dt;
