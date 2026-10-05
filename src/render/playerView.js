@@ -49,9 +49,12 @@ export function createPlayerView(scene, gradientMap) {
 
   return {
     // x, z : position au sol ; facing : orientation ; speed : pour le petit rebond de marche
-    update(x, z, facing, speed, time) {
+    // fx : { blink, dashing } — clignote quand il vient d'être touché, s'étire en esquivant
+    update(x, z, facing, speed, time, fx = {}) {
       root.position.set(x, 0, z);
       root.rotation.y = facing;
+      root.visible = !fx.blink || Math.floor(time * 20) % 2 === 0;
+      root.scale.set(fx.dashing ? 0.8 : 1, 1, fx.dashing ? 1.35 : 1);
       const bob = speed > 0.2 ? Math.abs(Math.sin(time * 12)) * 0.06 : 0;
       body.position.y = 0.5 + bob;
       head.position.y = 1.0 + bob;

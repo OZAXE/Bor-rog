@@ -32,12 +32,32 @@
           <div id="seed-label"></div>
         </div>
         <div id="floor-banner"></div>
+        <!-- Vie (en bas à gauche, comme dans Hades) -->
+        <div id="health">
+          <div id="health-bar"><div id="health-fill"></div></div>
+          <span id="health-text"></span>
+        </div>
+        <div id="kills"></div>
+        <!-- Voile rouge bref quand le héros est touché -->
+        <div id="hurt-flash"></div>
       </div>
 
       <!-- Contrôles tactiles (affichés uniquement sur mobile) -->
       <div id="touch-ui" hidden>
         <div id="joystick-zone"></div>
         <div id="joystick-base"><div id="joystick-knob"></div></div>
+        <button id="btn-attack" class="touch-btn" type="button">Frapper</button>
+        <button id="btn-dash" class="touch-btn" type="button">Esquiver</button>
+      </div>
+
+      <!-- Écran de mort -->
+      <div id="death-screen" class="hidden">
+        <h2>Tu es tombé</h2>
+        <p id="death-text"></p>
+        <div class="buttons">
+          <button id="btn-retry" type="button">Rejouer cette graine</button>
+          <button id="btn-new" type="button">Nouvelle descente</button>
+        </div>
       </div>
 
       <!-- Écran titre / pause -->

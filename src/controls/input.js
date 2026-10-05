@@ -5,9 +5,9 @@ import { createTouchControls } from './touch.js';
 
 // Rassemble toutes les sources d'entrée en un seul objet "intention" pour la simulation.
 // Le reste du jeu ne sait pas si on joue au clavier, à la souris ou au doigt.
-export function createInput() {
+export function createInput(canvas) {
   // Le clavier reste actif même sur tablette (clavier Bluetooth, PC tactile…)
-  const kb = createKeyboardMouse();
+  const kb = createKeyboardMouse(canvas);
   const touch = DEVICE.isMobile ? createTouchControls(CONFIG.controls) : null;
 
   return {
@@ -29,8 +29,8 @@ export function createInput() {
         moveY: move.y,
         aimX: aim ? aim.x : 0,
         aimY: aim ? aim.y : 0,
-        attack: false, // étape 3
-        dash: false, // étape 3
+        attack: kb.attack || (touch ? touch.attack : false),
+        dash: kb.dash || (touch ? touch.dash : false),
       };
     },
   };
