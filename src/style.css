@@ -840,3 +840,55 @@ body {
   opacity: 0.35;
   cursor: default;
 }
+
+#threshold .buttons.small button {
+  font-size: 13px;
+  padding: 8px 12px;
+  color: var(--ombre);
+  border-color: #4a3f7a;
+}
+
+#threshold .transfer {
+  width: min(100%, 560px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #0b0a14;
+  border: 2px solid #4a3f7a;
+}
+
+#threshold .transfer.hidden {
+  display: none;
+}
+
+#threshold .transfer p {
+  margin: 0;
+  font-size: 13px;
+}
+
+#threshold .transfer textarea {
+  width: 100%;
+  min-height: 70px;
+  padding: 8px;
+  font: 13px/1.4 ui-monospace, monospace;
+  color: var(--texte);
+  background: #05080a;
+  border: 1px solid #4a3f7a;
+  resize: vertical;
+  word-break: break-all;
+  /* Le reste de la page bloque la sélection : ici il faut pouvoir copier et coller */
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+  touch-action: auto;
+}
+
+#threshold .transfer-msg {
+  color: var(--accent);
+  min-height: 1.2em;
+}
+
+#threshold .transfer button[hidden] {
+  display: none;
+}

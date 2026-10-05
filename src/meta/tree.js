@@ -22,7 +22,7 @@ export const TREE = {
     name: 'Lame trempée',
     text: (per) => `+${per} dégât${per > 1 ? 's' : ''} par coup`,
     per: 1,
-    costs: [30, 90],
+    costs: [60], // un seul rang : les dégâts de base valent 1, +1 les double déjà
     requires: null,
   },
   swift: {
@@ -48,7 +48,7 @@ export const TREE = {
     name: 'Sève d\'Asphodèle',
     text: (per) => `+${per} PV maximum`,
     per: 2,
-    costs: [15, 25, 40, 60, 90],
+    costs: [20, 45, 80],
     requires: null,
   },
   roots: {
@@ -63,8 +63,8 @@ export const TREE = {
     branch: 'demeter',
     name: 'Défi de la Mort',
     text: (per) => `Une fois par partie, tu te relèves avec ${Math.round(per * 100)} % de tes PV`,
-    per: 0.3, // 30 % au rang 1, 60 % au rang 2
-    costs: [120, 250],
+    per: 0.25, // 25 % au rang 1, 50 % au rang 2
+    costs: [150, 300],
     requires: 'roots',
   },
 

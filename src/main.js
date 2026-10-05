@@ -530,8 +530,10 @@ function blockBrowserGestures() {
     passive: false,
   });
   document.addEventListener('gesturestart', prevent);
-  document.addEventListener('dblclick', prevent);
-  document.addEventListener('contextmenu', prevent);
+  // Le champ du code de sauvegarde garde la sélection et le menu "Coller" (appui long)
+  const outsideField = (e) => !e.target.closest?.('textarea') && e.preventDefault();
+  document.addEventListener('dblclick', outsideField);
+  document.addEventListener('contextmenu', outsideField);
 }
 
 // Plein écran + paysage sur Android (iOS Safari ne le permet pas sur iPhone, on ignore l'erreur)
