@@ -214,11 +214,11 @@ SIM.classes = {
     special: { id: 'volley', cooldown: 7, count: 5, spread: 0.9 },
   },
   mystic: {
-    maxHp: 11,
+    maxHp: 12,
     speed: 1,
     weapon: 'orb',
     attack: { cooldown: 0.65, damage: 3, duration: 0.25, moveFactor: 0.6, knockback: 5, autoAimRange: 7 },
-    shot: { speed: 8, range: 7, radius: 0.25, blast: 1.6 }, // blast : rayon de l'explosion (m)
+    shot: { speed: 8, range: 7, radius: 0.25, blast: 1.8 }, // blast : rayon de l'explosion (m)
     // Nova : explosion glacée autour du héros ; les ennemis touchés (hors boss) sont
     // ralentis : ils ne "pensent" et ne bougent qu'un pas sur deux pendant `slow` secondes
     special: { id: 'nova', cooldown: 7, radius: 3, damageMult: 1.5, slow: 3 },

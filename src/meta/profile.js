@@ -59,7 +59,7 @@ export function selectClass(profile, cls) {
 
 // Ce que la partie reçoit du profil (copie : la partie ne touche jamais au profil)
 export function metaOf(profile) {
-  return { attrs: { ...profile.attrs }, talents: { ...profile.talents } };
+  return { attrs: { ...profile.attrs }, talents: { ...profile.talents }, cls: profile.cls };
 }
 
 // ---------- Attributs ----------
@@ -155,12 +155,13 @@ export function sanitizeProfile(raw) {
   if (raw.version === 1 || (raw.ranks && !raw.attrs)) {
     p.shadows += refundV1(raw.ranks);
   } else {
-    const meta = cleanMeta({ attrs: raw.attrs, talents: raw.talents });
+    // Les talents actifs appartiennent à la classe choisie (talents de classe compris)
+    const meta = cleanMeta({ attrs: raw.attrs, talents: raw.talents, cls: classOf(raw.cls) });
     p.attrs = meta.attrs;
     p.talents = meta.talents;
     // Builds rangés des autres classes, validés avec les mêmes attributs
     const builds = raw.builds && typeof raw.builds === 'object' ? raw.builds : {};
-    for (const c of CLASS_IDS) if (builds[c]) p.builds[c] = cleanMeta({ attrs: p.attrs, talents: builds[c] }).talents;
+    for (const c of CLASS_IDS) if (builds[c]) p.builds[c] = cleanMeta({ attrs: p.attrs, talents: builds[c], cls: c }).talents;
   }
   const st = raw.stats || {};
   p.stats = {

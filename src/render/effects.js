@@ -141,6 +141,14 @@ export function createEffects(scene, haloTexture) {
           }
           shake = Math.max(shake, 0.15);
           break;
+        case 'parry':
+          // Parade : éclat doré sur le bouclier
+          burst(ev.x, 0.8, ev.z, 14, 0xf2c96b, 2.5, 0.35);
+          shake = Math.max(shake, 0.06);
+          break;
+        case 'poison':
+          burst(ev.x, 0.9, ev.z, 3, 0x7dff6a, 0.6, 0.5);
+          break;
         case 'heroShot':
           // Petite gerbe à la sortie de l'arc ou du bâton
           burst(ev.x + Math.sin(ev.facing) * 0.5, 0.75, ev.z + Math.cos(ev.facing) * 0.5, 4, ev.kind === 'orb' ? 0xb9a0ff : 0xeafff2, 1, 0.2);

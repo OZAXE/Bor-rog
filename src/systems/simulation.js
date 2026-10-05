@@ -7,6 +7,7 @@ import { sanitizeIntent } from './intent.js';
 import { updatePlayer } from './player.js';
 import { updateEnemies } from './enemies.js';
 import { updateProjectiles } from './projectiles.js';
+import { tickPoison } from './player.js';
 import { updateRooms } from './rooms.js';
 import { updateLoot } from './loot.js';
 import { updateHazards } from './hazards.js';
@@ -29,6 +30,7 @@ export function stepGame(state, rawIntent) {
   updatePlayer(state, intent, STEP);
   updateEnemies(state, STEP);
   updateProjectiles(state, STEP);
+  tickPoison(state);
   updateHazards(state);
   if (state.status !== 'playing') return;
   updateRooms(state);

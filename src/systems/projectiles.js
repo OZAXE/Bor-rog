@@ -5,10 +5,11 @@
 //   ennemi, ou en traversent plusieurs avec Fendoir) et orbes de la Mystique (explosent
 //   au contact, contre un mur ou en bout de course, et blessent tout autour).
 
-import { SIM } from './simConfig.js';
+import { SIM, ticks } from './simConfig.js';
 import { isSolid, tileAt } from '../dungeon/tiles.js';
 import { hurtPlayer, damageEnemy, removeDeadEnemies } from './player.js';
 import { playerStats } from './boons.js';
+import { nextFloat } from '../core/rng.js';
 
 export function updateProjectiles(state, dt) {
   const p = state.player;
@@ -48,7 +49,15 @@ export function updateProjectiles(state, dt) {
           return false;
         }
         const len = Math.hypot(a.vx, a.vz) || 1;
-        damageEnemy(state, e, a.damage ?? playerStats(p).damage, { x: a.vx / len, z: a.vz / len });
+        const st = playerStats(p);
+        let dmg = a.damage ?? st.damage;
+        // Tir précis (Chasseresse) : bonus sur une cible touchée à plus de 5 m du tireur
+        if (a.kind === 'heroArrow' && st.marksman && Math.hypot(e.x - a.ox, e.z - a.oz) > 5) dmg *= 1 + st.marksman;
+        if (damageEnemy(state, e, dmg, { x: a.vx / len, z: a.vz / len }) && a.kind === 'heroArrow' && st.poisonDps) {
+          // Flèches empoisonnées : le poison se renouvelle à chaque flèche
+          e.poison = ticks(st.poisonTime);
+          e.poisonDps = st.poisonDps;
+        }
         // Flèche perforante (Fendoir) : continue sa course
         if (a.pierce > 0) {
           a.pierce--;
@@ -86,9 +95,12 @@ export function updateProjectiles(state, dt) {
 }
 
 // Explosion d'un orbe : blesse tous les ennemis dans le rayon. Renvoie true si quelqu'un est touché.
-function explode(state, a) {
-  state.events.push({ type: 'orbBurst', x: a.x, z: a.z, r: a.blast });
+// depth : génération de la réaction en chaîne (limitée pour rester raisonnable)
+function explode(state, a, depth = 0) {
+  state.events.push({ type: 'orbBurst', x: a.x, z: a.z, r: a.blast, chain: depth > 0 });
+  const st = playerStats(state.player);
   let any = false;
+  const killed = [];
   for (const e of state.enemies) {
     if (e.hp <= 0 || e.untargetable) continue;
     const dx = e.x - a.x;
@@ -97,7 +109,18 @@ function explode(state, a) {
     if (d > a.blast + SIM.enemies[e.type].radius) continue;
     // Recul vers l'extérieur de l'explosion
     const dir = d > 1e-6 ? { x: dx / d, z: dz / d } : { x: 0, z: 1 };
-    if (damageEnemy(state, e, a.damage, dir)) any = true;
+    if (!damageEnemy(state, e, a.damage, dir)) continue;
+    any = true;
+    // Torrent d'âmes (Mystique) : l'explosion ralentit (pas les boss)
+    if (st.blastSlow && !e.boss && !e.part) e.slow = Math.max(e.slow || 0, ticks(st.blastSlow));
+    if (e.hp <= 0) killed.push(e);
+  }
+  // Réaction en chaîne (Mystique) : un ennemi tué peut exploser à son tour.
+  // Le tirage n'a lieu qu'avec le talent (sinon la partie ne change pas).
+  if (st.chain && depth < 3) {
+    for (const e of killed) {
+      if (nextFloat(state.rng) < st.chain) explode(state, { x: e.x, z: e.z, blast: a.blast, damage: a.damage }, depth + 1);
+    }
   }
   return any;
 }

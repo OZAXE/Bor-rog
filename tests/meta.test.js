@@ -106,7 +106,7 @@ test('arbres : talents bien formés, parents du même attribut et d\'un palier i
   for (let k = 1; k < ATTR_COSTS.length; k++) assert.ok(ATTR_COSTS[k] > ATTR_COSTS[k - 1]);
   for (const id of TALENT_IDS) {
     const t = TALENTS[id];
-    assert.ok(ATTRS[t.attr], `${id} : attribut inconnu`);
+    assert.ok(t.cls ? !t.attr : ATTRS[t.attr], `${id} : attribut ou classe`);
     assert.ok(t.tier >= 0 && t.tier < TIER_LEVELS.length, `${id} : palier`);
     assert.ok(Number.isInteger(t.ranks) && t.ranks >= 1);
     assert.equal(typeof t.text(t.per * t.ranks), 'string');
@@ -114,6 +114,7 @@ test('arbres : talents bien formés, parents du même attribut et d\'un palier i
     for (const r of t.requires) {
       assert.ok(TALENTS[r], `${id} : parent inconnu ${r}`);
       assert.equal(TALENTS[r].attr, t.attr, `${id} : parent d'un autre attribut`);
+      assert.equal(TALENTS[r].cls, t.cls, `${id} : parent d'une autre classe`);
       assert.ok(TALENTS[r].tier < t.tier, `${id} : parent pas plus bas`);
     }
   }
@@ -162,7 +163,7 @@ test('nettoyage : palier non atteint, parent manquant, points en trop ou valeurs
   assert.equal(m.attrs.demeter, 1);
   assert.equal(m.attrs.hermes, 1);
   assert.deepEqual(m.talents, { vigor: TALENTS.vigor.ranks });
-  assert.deepEqual(cleanMeta(null), { attrs: { ares: 1, demeter: 1, hermes: 1, charon: 1 }, talents: {} });
+  assert.deepEqual(cleanMeta(null), { attrs: { ares: 1, demeter: 1, hermes: 1, charon: 1 }, talents: {}, cls: 'warrior' });
 });
 
 // ---------- Le profil ----------

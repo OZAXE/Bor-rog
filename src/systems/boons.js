@@ -71,13 +71,16 @@ export function playerStats(p) {
   const low = p.hp <= p.maxHp * 0.3 ? m('surge') : 0;
   // Rage d'Arès : cadence accrue juste après avoir vaincu un ennemi
   const rage = p.rage > 0 ? m('rage') : 0;
+  // Instinct de chasse (Chasseresse) : vitesse et cadence après avoir vaincu un ennemi
+  const hunt = p.hunt > 0 ? m('hunt') : 0;
+  const sp = cls.special;
   return {
     weapon: cls.weapon, // 'sword', 'bow' ou 'orb'
     damage: (atk.damage + n('ares')) * (1 + m('blade') + low),
-    speed: base.speed * cls.speed * (1 + 0.12 * n('hermes') + m('fleet') + a('hermes')),
+    speed: base.speed * cls.speed * (1 + 0.12 * n('hermes') + m('fleet') + a('hermes') + hunt),
     attackRange: atk.range * range,
     attackArc: atk.arc * (1 + m('cleave')),
-    attackCooldown: atk.cooldown * 0.85 ** n('zeus') * (1 - m('swift')) * (1 - a('ares')) * (1 - rage),
+    attackCooldown: atk.cooldown * 0.85 ** n('zeus') * (1 - m('swift')) * (1 - a('ares')) * (1 - rage) * (1 - hunt),
     knockback: atk.knockback,
     attackDuration: atk.duration,
     moveFactor: atk.moveFactor,
@@ -88,7 +91,24 @@ export function playerStats(p) {
     shotRange: shot ? shot.range * range : 0,
     shotRadius: shot ? shot.radius : 0,
     pierce: cls.weapon === 'bow' ? (shot.pierce || 0) + rankOf(p.meta, 'cleave') : 0,
-    blast: shot && shot.blast ? shot.blast * (1 + m('cleave')) : 0,
+    blast: shot && shot.blast ? shot.blast * (1 + m('cleave') + m('bigOrb')) : 0,
+    // ---------- Talents de classe (étape 7c) ----------
+    special: {
+      ...sp,
+      cooldown: sp.cooldown * (1 - m('whirlHaste') - m('quiver') - m('quickNova')),
+      radius: sp.radius ? sp.radius * (1 + m('whirlSize')) : 0,
+      count: sp.count ? sp.count + m('barrage') : 0,
+      slow: sp.slow ? sp.slow + m('deepFreeze') : 0,
+      echo: rankOf(p.meta, 'tempest') > 0 || rankOf(p.meta, 'echoVolley') > 0, // seconde frappe ou salve
+    },
+    parry: m('parry'), // chance de parer un coup
+    poisonDps: m('venom'), // dégâts par seconde du poison (0 = pas de poison)
+    poisonTime: 3 + m('linger'),
+    marksman: m('marksman'), // bonus de dégâts au-delà de 5 m
+    twinOrbs: m('twinOrbs'), // part des dégâts de chacun des deux orbes (0 = un seul orbe)
+    shatter: m('shatter'), // bonus de dégâts sur les ennemis ralentis
+    blastSlow: m('torrent'), // ralentissement infligé par les explosions d'orbe (s)
+    chain: m('chain'), // chance qu'un ennemi tué par une explosion explose à son tour
     critChance: m('crit'), // chance de dégâts doublés
     executeBelow: m('execute'), // dégâts doublés sous cette part de PV (0 = inactif)
     momentum: m('momentum'), // dégâts en plus sur le premier coup après une esquive

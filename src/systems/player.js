@@ -99,13 +99,27 @@ export function updatePlayer(state, intent, dt) {
     }
     useSpecial(state, st);
   }
+  // Seconde frappe du Tourbillon / seconde salve de la Volée
+  if (p.specialEcho > 0 && --p.specialEcho === 0) {
+    const facing = p.facing;
+    p.facing = p.echoFacing;
+    useSpecial(state, st, true);
+    p.facing = facing;
+  }
 }
 
 // Capacités spéciales des classes (réglages : SIM.classes[classe].special)
-function useSpecial(state, st) {
+// echo : seconde frappe ou seconde salve (Tempête, Seconde salve), sans recharge
+function useSpecial(state, st, echo = false) {
   const p = state.player;
-  const sp = classRules(p.cls).special;
-  p.specialCooldown = ticks(sp.cooldown);
+  const sp = st.special;
+  if (!echo) {
+    p.specialCooldown = ticks(sp.cooldown);
+    if (sp.echo) {
+      p.specialEcho = ticks(0.3);
+      p.echoFacing = p.facing;
+    }
+  }
   p.attackTimer = 0;
   if (sp.id === 'volley') {
     // Volée : flèches en éventail autour de la direction visée
@@ -115,12 +129,12 @@ function useSpecial(state, st) {
       shoot(state, st, true);
     }
     p.facing = base;
-    state.events.push({ type: 'special', id: 'volley', x: p.x, z: p.z, facing: base });
+    state.events.push({ type: 'special', id: 'volley', x: p.x, z: p.z, facing: base, echo });
     return;
   }
   // Tourbillon (Guerrier) et Nova (Mystique) : tout ce qui est autour du héros
-  if (sp.id === 'whirl') p.invuln = Math.max(p.invuln, ticks(sp.invuln));
-  state.events.push({ type: 'special', id: sp.id, x: p.x, z: p.z, r: sp.radius, facing: p.facing });
+  if (sp.id === 'whirl' && !echo) p.invuln = Math.max(p.invuln, ticks(sp.invuln));
+  state.events.push({ type: 'special', id: sp.id, x: p.x, z: p.z, r: sp.radius, facing: p.facing, echo });
   for (const e of state.enemies) {
     const dx = e.x - p.x;
     const dz = e.z - p.z;
@@ -147,11 +161,14 @@ function resolvePlayerHit(state) {
   // Élan : bonus sur le premier coup après une esquive (consommé même si le coup rate)
   const bonus = p.afterDash > 0 ? st.momentum : 0;
   p.afterDash = 0;
+  // Riposte : coup doublé juste après une parade
+  const mult = p.riposte ? 2 : 1;
+  p.riposte = false;
   for (const e of state.enemies) {
     const r = SIM.enemies[e.type].radius;
     if (!inArc(p.x, p.z, p.facing, st.attackRange, st.attackArc, e.x, e.z, r)) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
-    damageEnemy(state, e, st.damage + bonus, dir);
+    damageEnemy(state, e, (st.damage + bonus) * mult, dir);
   }
   removeDeadEnemies(state);
 }
@@ -167,6 +184,18 @@ function shoot(state, st, special = false) {
   if (!special) p.afterDash = 0;
   const start = SIM.player.radius + 0.2;
   const kind = st.weapon === 'bow' ? 'heroArrow' : 'orb';
+  // Orbes jumeaux (Mystique) : deux orbes un peu écartés, chacun moins fort
+  if (kind === 'orb' && st.twinOrbs && !p.twinning) {
+    const f = p.facing;
+    p.twinning = true;
+    for (const da of [-0.16, 0.16]) {
+      p.facing = f + da;
+      shoot(state, { ...st, damage: st.damage * st.twinOrbs }, special);
+    }
+    p.facing = f;
+    p.twinning = false;
+    return;
+  }
   state.projectiles.push({
     id: state.nextId++,
     kind,
@@ -181,6 +210,8 @@ function shoot(state, st, special = false) {
     pierce: st.pierce, // ennemis que la flèche peut encore traverser
     hit: [], // ennemis déjà touchés par ce projectile
     blast: st.blast, // rayon d'explosion de l'orbe (0 = pas d'explosion)
+    ox: p.x, // point de départ (Tir précis : bonus au-delà de 5 m)
+    oz: p.z,
   });
   if (!special) state.events.push({ type: 'heroShot', kind, x: p.x, z: p.z, facing: p.facing });
 }
@@ -222,6 +253,8 @@ export function damageEnemy(state, e, amount, dir) {
     dmg *= 2;
     crit = true;
   }
+  // Bris de glace (Mystique) : plus de dégâts sur un ennemi ralenti
+  if (st.shatter && e.slow > 0) dmg *= 1 + st.shatter;
   // Exécution : dégâts doublés sur un ennemi déjà bien entamé
   if (st.executeBelow && e.hp <= e.maxHp * st.executeBelow) dmg *= 2;
   e.hp -= dmg;
@@ -297,6 +330,10 @@ export function removeDeadEnemies(state) {
   state.kills += killed;
   // Rage d'Arès : cadence accrue pendant 3 s après avoir vaincu un ennemi
   if (killed > 0 && rankOf(p.meta, 'rage')) p.rage = ticks(3);
+  // Instinct de chasse (Chasseresse) : vitesse et cadence pendant 3 s
+  if (killed > 0 && rankOf(p.meta, 'hunt')) p.hunt = ticks(3);
+  // Colère des Titans (Guerrier) : chaque ennemi vaincu recharge le Tourbillon de 1 s
+  if (killed > 0 && rankOf(p.meta, 'titan')) p.specialCooldown = Math.max(0, p.specialCooldown - ticks(1) * killed);
 }
 
 // Sans visée (mobile) : l'ennemi le plus proche à portée, en privilégiant ceux devant
@@ -324,8 +361,16 @@ export function autoAimTarget(state) {
 export function hurtPlayer(state, amount, fromX, fromZ) {
   const p = state.player;
   if (p.invuln > 0 || state.status !== 'playing') return false;
+  const st = playerStats(p);
+  // Parade (Guerrier) : chance d'annuler le coup ; le tirage n'a lieu qu'avec le talent
+  if (st.parry > 0 && nextFloat(state.rng) < st.parry) {
+    p.invuln = ticks(0.3);
+    p.riposte = rankOf(p.meta, 'riposte') > 0;
+    state.events.push({ type: 'parry', x: p.x, z: p.z });
+    return false;
+  }
   p.hp = Math.max(0, p.hp - amount);
-  p.invuln = ticks(playerStats(p).hurtInvuln);
+  p.invuln = ticks(st.hurtInvuln);
   state.events.push({ type: 'playerHurt', amount, x: p.x, z: p.z, fromX, fromZ });
   if (p.hp === 0 && p.defiance > 0) {
     // Défi de la Mort (arbre permanent) : on se relève, une fois par partie
@@ -352,10 +397,24 @@ function tickDown(p, st) {
   if (p.invuln > 0) p.invuln--;
   if (p.rage > 0) p.rage--;
   if (p.specialCooldown > 0) p.specialCooldown--;
+  if (p.hunt > 0) p.hunt--;
   if (p.afterDash > 0) p.afterDash--;
 }
 
 function approach(value, target, maxDelta) {
   if (value < target) return Math.min(value + maxDelta, target);
   return Math.max(value - maxDelta, target);
+}
+
+// Poison (Chasseresse) : les ennemis empoisonnés perdent des PV chaque pas
+export function tickPoison(state) {
+  let died = false;
+  for (const e of state.enemies) {
+    if (!(e.poison > 0)) continue;
+    e.poison--;
+    e.hp -= e.poisonDps / SIM.tickRate;
+    if (e.poison % 30 === 0) state.events.push({ type: 'poison', id: e.id, x: e.x, z: e.z });
+    if (e.hp <= 0) died = true;
+  }
+  if (died) removeDeadEnemies(state);
 }
