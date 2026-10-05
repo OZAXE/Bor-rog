@@ -62,6 +62,62 @@ export function generateFloor(seed, floorIndex, params = DEFAULT_PARAMS) {
 }
 
 // ---------------------------------------------------------------------------
+// Étage de boss : plan fixe, du sud au nord
+//   salle de départ (où l'on se prépare) -> grande arène -> sanctuaire de l'escalier
+// Le sanctuaire n'est accessible qu'en traversant l'arène, qui se scelle dès qu'on
+// y entre : l'escalier n'est donc atteignable qu'après la victoire.
+// ---------------------------------------------------------------------------
+
+export function generateBossFloor(seed, floorIndex, bossId) {
+  const rng = createRng(`${seed}/boss-${floorIndex}`);
+  const W = 31;
+  const H = 40;
+  const dungeon = {
+    width: W,
+    height: H,
+    tiles: new Array(W * H).fill(TILE.VOID),
+    rooms: [],
+    start: null,
+    stairs: null,
+    decor: [],
+    boss: null,
+  };
+  const room = (x, y, w, h, type) => {
+    for (let r = y; r < y + h; r++) for (let c = x; c < x + w; c++) setTile(dungeon, c, r, TILE.FLOOR);
+    const rm = { id: dungeon.rooms.length, x, y, w, h, type };
+    dungeon.rooms.push(rm);
+    return rm;
+  };
+  const sanctum = room(13, 2, 5, 5, 'stairs');
+  const arena = room(7, 10, 17, 15, 'boss');
+  const start = room(12, 30, 7, 7, 'start');
+  // Couloirs de 2 cases entre les salles
+  carveLine(dungeon, center(sanctum), center(arena), 2);
+  carveLine(dungeon, center(arena), center(start), 2);
+  surroundWithWalls(dungeon);
+
+  // Quatre colonnes dans l'arène : des abris... et des murs où un boss qui charge s'écrase
+  for (const [c, r] of [
+    [arena.x + 3, arena.y + 3],
+    [arena.x + arena.w - 4, arena.y + 3],
+    [arena.x + 3, arena.y + arena.h - 4],
+    [arena.x + arena.w - 4, arena.y + arena.h - 4],
+  ]) {
+    setTile(dungeon, c, r, TILE.PILLAR);
+  }
+
+  dungeon.start = center(start);
+  dungeon.stairs = center(sanctum);
+  setTile(dungeon, dungeon.stairs.c, dungeon.stairs.r, TILE.STAIRS);
+  const ac = center(arena);
+  dungeon.boss = { id: bossId, roomId: arena.id, x: ac.c + 0.5, z: ac.r - 2 + 0.5 };
+
+  placeTorches(rng, dungeon, { torchChance: 0.55 });
+  placeDebris(rng, dungeon, { debrisChance: 0.02 });
+  return dungeon;
+}
+
+// ---------------------------------------------------------------------------
 // Découpage BSP
 // ---------------------------------------------------------------------------
 

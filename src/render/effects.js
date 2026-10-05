@@ -107,10 +107,31 @@ export function createEffects(scene, haloTexture) {
         case 'arrowBreak':
           burst(ev.x, 0.7, ev.z, 5, 0xffd27a, 1.5, 0.2);
           break;
+        case 'breath': {
+          // Trois jets de flammes vertes dans les directions des cônes
+          for (const a of SIM.bosses.cerberus.breath.angles) {
+            const f = ev.facing + a;
+            for (let k = 1; k <= 4; k++) burst(ev.x + Math.sin(f) * k * 1.2, 0.8, ev.z + Math.cos(f) * k * 1.2, 4, 0x2fff86, 1.2, 0.45);
+          }
+          shake = Math.max(shake, 0.1);
+          break;
+        }
+        case 'howl':
+          burst(ev.x, 1.2, ev.z, 40, 0x2fff86, 5, 0.9);
+          shake = Math.max(shake, 0.3);
+          break;
+        case 'summon':
+          burst(ev.x, 0.5, ev.z, 14, 0x8a5cff, 2, 0.6);
+          break;
+        case 'bossDefeated':
+          burst(ev.x, 1, ev.z, 60, 0xf2c96b, 6, 1.2);
+          burst(ev.x, 1, ev.z, 40, 0x2fff86, 4, 1.4);
+          shake = Math.max(shake, 0.35);
+          break;
         case 'crash':
           // Furie qui percute un mur : gerbe de poussière et petit tremblement
           burst(ev.x, 0.6, ev.z, 14, 0xb9a98c, 2.5, 0.5);
-          shake = Math.max(shake, 0.12);
+          shake = Math.max(shake, 0.18);
           break;
         case 'pickup':
           burst(ev.x, 0.4, ev.z, ev.kind === 'obol' ? 4 : 10, ev.kind === 'obol' ? 0xf2c96b : 0xff5a6a, 1.2, 0.35);
@@ -152,21 +173,21 @@ export function createEffects(scene, haloTexture) {
       // Particules : gravité simple, rétrécissent en mourant
       let n = 0;
       for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.life -= dt;
-        if (p.life <= 0) {
+        const pt = particles[i];
+        pt.life -= dt;
+        if (pt.life <= 0) {
           particles.splice(i, 1);
           continue;
         }
-        p.vy -= 9 * dt;
-        p.x += p.vx * dt;
-        p.y = Math.max(0.05, p.y + p.vy * dt);
-        p.z += p.vz * dt;
+        pt.vy -= 9 * dt;
+        pt.x += pt.vx * dt;
+        pt.y = Math.max(0.05, pt.y + pt.vy * dt);
+        pt.z += pt.vz * dt;
       }
-      for (const p of particles) {
-        const k = p.life / p.max;
-        pMesh.setMatrixAt(n, matrix.compose(pos.set(p.x, p.y, p.z), quat, scl.setScalar(0.4 + k)));
-        pMesh.setColorAt(n, color.setRGB(p.r * k, p.g * k, p.b * k));
+      for (const pt of particles) {
+        const k = pt.life / pt.max;
+        pMesh.setMatrixAt(n, matrix.compose(pos.set(pt.x, pt.y, pt.z), quat, scl.setScalar(0.4 + k)));
+        pMesh.setColorAt(n, color.setRGB(pt.r * k, pt.g * k, pt.b * k));
         n++;
       }
       pMesh.count = n;

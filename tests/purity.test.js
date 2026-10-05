@@ -45,3 +45,19 @@ test('aucune source de hasard, de temps ou de navigateur dans la simulation', ()
   }
   assert.deepEqual(problems, []);
 });
+
+// Le rendu LIT l'état sans jamais le modifier (sinon l'affichage pourrait changer
+// la partie, et le rejeu ou le multijoueur deviendraient faux)
+test("le rendu n'écrit jamais dans l'état du jeu", () => {
+  const files = listJs('src/render');
+  assert.ok(files.length > 0);
+  const WRITE = /\b(state|e|p|it|chest|enemy|boss)\.[A-Za-z_][\w.]*\s*(=(?!=)|\+=|-=|\+\+|--)/;
+  const problems = [];
+  for (const file of files) {
+    const code = stripComments(readFileSync(join(ROOT, file), 'utf8'));
+    code.split('\n').forEach((line, i) => {
+      if (WRITE.test(line)) problems.push(`${file}:${i + 1} : ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(problems, []);
+});

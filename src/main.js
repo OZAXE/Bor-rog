@@ -18,6 +18,8 @@ import { createLootView } from './render/lootView.js';
 import { BOONS } from './systems/boons.js';
 import { rerollCost } from './systems/descent.js';
 import { SIM } from './systems/simConfig.js';
+import { ZONE_THEMES } from './render/zoneThemes.js';
+import { zoneOf, FLOORS_PER_ZONE } from './dungeon/zones.js';
 import { createInput } from './controls/input.js';
 
 // ---------------------------------------------------------------------------
@@ -52,7 +54,8 @@ bindResize(renderer, cam.resize);
 // Éclairage peu coûteux : ambiance froide + une directionnelle + UNE lumière ponctuelle
 // qui suit le héros (les flammes sont "peintes" dans les couleurs, cf. dungeonMesh)
 const L = CONFIG.lights;
-scene.add(new THREE.HemisphereLight(L.ambientSky, L.ambientGround, L.ambientIntensity));
+const ambient = new THREE.HemisphereLight(L.ambientSky, L.ambientGround, L.ambientIntensity);
+scene.add(ambient);
 const key = new THREE.DirectionalLight(L.keyColor, L.keyIntensity);
 key.position.set(3, 10, 6);
 scene.add(key);
@@ -66,13 +69,37 @@ scene.add(heroLight);
 
 // Textures dessinées par le code, créées une fois pour toute la partie
 const textures = {
-  atlas: createAtlasTexture(),
   halo: createHaloTexture(),
   toon: createToonGradient(),
 };
-const dungeonResources = createDungeonResources(textures);
-const makeDungeonView = () =>
-  createDungeonView(scene, state.dungeon, dungeonResources, cam.camera.quaternion);
+// Ressources du décor par zone (atlas aux couleurs de la zone), créées à la première visite
+const zoneResources = new Map();
+let currentZone = null;
+function resourcesFor(zoneId) {
+  if (!zoneResources.has(zoneId)) {
+    const theme = ZONE_THEMES[zoneId];
+    zoneResources.set(zoneId, createDungeonResources({ ...textures, atlas: createAtlasTexture(theme.palette) }, theme));
+  }
+  return zoneResources.get(zoneId);
+}
+// Applique l'ambiance de la zone (fond, lumières) quand on en change
+function applyZone() {
+  const zone = zoneOf(state.floorIndex);
+  if (zone.id === currentZone) return;
+  currentZone = zone.id;
+  const t = ZONE_THEMES[zone.id];
+  scene.background.set(t.background);
+  ambient.color.set(t.lights.sky);
+  ambient.groundColor.set(t.lights.ground);
+  ambient.intensity = t.lights.ambient;
+  key.color.set(t.lights.key);
+  key.intensity = t.lights.keyIntensity;
+  heroLight.color.set(t.lights.hero);
+}
+const makeDungeonView = () => {
+  applyZone();
+  return createDungeonView(scene, state.dungeon, resourcesFor(zoneOf(state.floorIndex).id), cam.camera.quaternion);
+};
 let dungeonView = makeDungeonView();
 let viewFloor = state.floorIndex;
 const playerView = createPlayerView(scene, textures.toon);
@@ -147,8 +174,12 @@ function setPlaying(value) {
 }
 
 function showFloor(withBanner) {
-  $('floor-label').textContent = `Étage ${state.floorIndex + 1}`;
-  if (withBanner) showBanner(`Étage ${state.floorIndex + 1}`);
+  const zone = zoneOf(state.floorIndex);
+  $('floor-label').textContent = `Étage ${state.floorIndex + 1} · ${zone.name}`;
+  if (!withBanner) return;
+  // Premier étage d'une zone : on annonce aussi la zone
+  const firstOfZone = state.floorIndex % FLOORS_PER_ZONE === 0;
+  showBanner(firstOfZone ? `${zone.name}` : `Étage ${state.floorIndex + 1}`);
 }
 
 function showBanner(text, kind = '') {
@@ -181,9 +212,18 @@ function updateHud() {
       .map(([id, n]) => `<span>${BOONS[id].name}${n > 1 ? ` ×${n}` : ''}</span>`)
       .join('');
   }
+  // Boss : barre de vie en haut de l'écran, dès que le combat commence
+  const boss = state.enemies.find((e) => e.boss);
+  const bossBar = $('boss-bar');
+  if (boss && boss.alert) {
+    bossBar.classList.remove('hidden');
+    $('boss-name').textContent = SIM.bosses[boss.type].name;
+    $('boss-fill').style.width = `${(100 * Math.max(0, boss.hp)) / boss.maxHp}%`;
+  } else bossBar.classList.add('hidden');
   // Salle verrouillée : nombre d'ennemis encore à vaincre
   const lockEl = $('lock-info');
-  if (state.lock) {
+  // Pendant un combat de boss, la barre du boss suffit (le compteur ferait doublon)
+  if (state.lock && !(boss && boss.alert)) {
     const alive = new Set(state.enemies.map((e) => e.id));
     const left = state.lock.enemyIds.filter((id) => alive.has(id)).length;
     lockEl.textContent = `Salle scellée · ${left} ennemi${left > 1 ? 's' : ''}`;
@@ -305,8 +345,15 @@ function tick() {
   stepGame(state, intent);
   for (const ev of state.events) {
     effects.handle(ev);
-    if (ev.type === 'roomLocked') showBanner('Salle scellée', 'danger');
-    if (ev.type === 'roomCleared') showBanner('Salle purifiée', 'calm');
+    if (ev.type === 'roomLocked') {
+      const boss = state.enemies.find((e) => e.boss);
+      showBanner(boss ? SIM.bosses[boss.type].name.split(',')[0] : 'Salle scellée', 'danger');
+    }
+    if (ev.type === 'bossDefeated') showBanner(`${SIM.bosses[ev.bossType].name.split(',')[0]} est vaincu`, 'calm');
+    // Arène de boss purifiée : on garde le bandeau de victoire affiché juste avant
+    if (ev.type === 'roomCleared' && state.dungeon.rooms.find((r) => r.id === ev.roomId)?.type !== 'boss') {
+      showBanner('Salle purifiée', 'calm');
+    }
     if (ev.type === 'playerHurt') {
       hurtFlash.classList.add('on');
       clearTimeout(hurtTimeout);

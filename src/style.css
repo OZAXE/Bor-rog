@@ -224,6 +224,53 @@ body {
   color: var(--texte);
 }
 
+/* ---------- Vie du boss ---------- */
+#boss-bar {
+  position: absolute;
+  top: calc(40px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, 70vw);
+  text-align: center;
+}
+
+#boss-bar.hidden {
+  display: none;
+}
+
+#boss-name {
+  font-size: 15px;
+  letter-spacing: 2px;
+  color: #ff8a7a;
+  text-shadow: 0 1px 3px #000;
+  margin-bottom: 4px;
+}
+
+#boss-bar .bar {
+  position: relative;
+  height: 12px;
+  border: 2px solid #8a6a2c;
+  background: #1a0a0c;
+  box-shadow: 0 0 0 2px #05080a;
+}
+
+#boss-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(#ff5a3a, #a0201a);
+  transition: width 0.12s;
+}
+
+/* Repère de la seconde phase (50 %) */
+#boss-bar .mark {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: 50%;
+  width: 2px;
+  background: var(--accent);
+}
+
 /* ---------- Écran de Charon ---------- */
 #charon {
   position: absolute;
@@ -520,6 +567,10 @@ body {
   #gold {
     bottom: auto;
     top: calc(74px + env(safe-area-inset-top));
+  }
+  #boss-bar {
+    top: calc(56px + env(safe-area-inset-top));
+    width: 52vw;
   }
   #boon-list {
     bottom: auto;

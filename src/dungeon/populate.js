@@ -11,6 +11,10 @@ import { floorScaling } from '../systems/difficulty.js';
 
 // Renvoie la liste des ennemis (sans identifiant : c'est l'état qui les numérote)
 export function populateFloor(dungeon, seed, floorIndex, spawn = SIM.spawn) {
+  // Étage de boss : le boss seul dans son arène
+  if (dungeon.boss) {
+    return [{ type: dungeon.boss.id, x: dungeon.boss.x, z: dungeon.boss.z, roomId: dungeon.boss.roomId, boss: true }];
+  }
   const rng = createRng(`${seed}/monstres-${floorIndex}`);
   const archerChance = Math.min(
     spawn.maxArcherChance,
