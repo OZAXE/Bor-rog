@@ -71,7 +71,10 @@ test("arbre : chaque nœud a une branche connue, des prix croissants et un prér
 });
 
 test('rangs nettoyés : nœuds inconnus retirés, rangs plafonnés, valeurs bizarres ignorées', () => {
-  assert.deepEqual(cleanRanks({ blade: 9, inconnu: 2, vigor: -1, fleet: 1.5, purse: '2', crit: 1 }), { blade: 2, crit: 1 });
+  assert.deepEqual(cleanRanks({ blade: 9, inconnu: 2, vigor: -1, fleet: 1.5, purse: '2', crit: 1 }), {
+    blade: TREE.blade.costs.length,
+    crit: 1,
+  });
   assert.deepEqual(cleanRanks(null), {});
 });
 
@@ -85,13 +88,12 @@ test('achat : verrouillé sans prérequis, refusé si trop cher, plafonné au ra
   assert.ok(buy(p, 'blade'));
   assert.equal(p.shadows, 1000 - TREE.blade.costs[0]);
   assert.ok(buy(p, 'swift'), 'débloqué par Lame trempée');
-  assert.ok(buy(p, 'blade'));
-  assert.equal(nextCost(p, 'blade'), null);
-  assert.equal(buyBlocker(p, 'blade'), 'maximum');
-  assert.equal(buy(p, 'blade'), false);
+  while (nextCost(p, 'vigor') !== null) assert.ok(buy(p, 'vigor'));
+  assert.equal(buyBlocker(p, 'vigor'), 'maximum');
+  assert.equal(buy(p, 'vigor'), false);
+  assert.equal(p.ranks.vigor, TREE.vigor.costs.length);
   p.shadows = 0;
-  assert.equal(buyBlocker(p, 'vigor'), 'trop cher');
-  assert.equal(p.ranks.blade, 2);
+  assert.equal(buyBlocker(p, 'roots'), 'trop cher');
 });
 
 test('remise à zéro : toutes les Ombres investies sont rendues', () => {
@@ -182,10 +184,11 @@ test('Sève d\'Asphodèle et Bourse du passeur : PV et oboles de départ', () =>
 });
 
 test('Lame trempée : +1 dégât par rang', () => {
-  const s = arena({ blade: 2 });
+  const max = TREE.blade.costs.length;
+  const s = arena({ blade: max });
   const e = addEnemy(s, 'shade', 11.5, 12.6, { hp: 10, maxHp: 10 });
   stepGame(s, { ...SOUTH, attack: true });
-  assert.equal(e.hp, 10 - 3);
+  assert.equal(e.hp, 10 - 1 - max);
 });
 
 test('Bras infatigable : plus de coups dans le même temps', () => {
@@ -258,8 +261,9 @@ test('Second souffle : deux esquives enchaînées, une seule sans', () => {
   assert.equal(s.player.dashCharges, 2);
 });
 
-test('Défi de la Mort : on se relève une fois (30 % puis 60 % des PV), la seconde mort est définitive', () => {
-  for (const [rank, part] of [[1, 0.3], [2, 0.6]]) {
+test('Défi de la Mort : on se relève une fois (une part des PV selon le rang), la seconde mort est définitive', () => {
+  for (const rank of [1, 2]) {
+    const part = rank * TREE.defiance.per;
     const s = arena({ vigor: 1, roots: 1, defiance: rank });
     hurtPlayer(s, 999, 0, 0);
     assert.equal(s.status, 'playing');
@@ -316,4 +320,58 @@ test("Bouclier du vent : esquiver à travers une flèche la renvoie sur l'archer
   assert.ok(reflected, 'la flèche aurait dû être renvoyée');
   assert.equal(s.player.hp, s.player.maxHp);
   assert.ok(archer.hp < 50, "la flèche renvoyée aurait dû blesser l'archer");
+});
+
+// ---------- Code d'export (étape 6b) ----------
+
+test("code d'export : aller-retour exact, espaces et retours à la ligne tolérés", async () => {
+  const { encodeProfile, decodeProfile } = await import('../src/meta/transfer.js');
+  const p = newProfile();
+  p.shadows = 1234;
+  p.ranks = { blade: 1, swift: 1, vigor: 3, purse: 3, choice4: 1 };
+  p.stats = { runs: 17, victories: 2, bestFloor: 9, totalShadows: 4321 };
+  const code = encodeProfile(p);
+  assert.match(code, /^BORROG1-[A-Za-z0-9._]+-[a-z0-9]+$/);
+  assert.deepEqual(decodeProfile(code).profile, p);
+  const messy = `  ${code.slice(0, 10)}\n${code.slice(10, 30)} ${code.slice(30)}\n`;
+  assert.deepEqual(decodeProfile(messy).profile, p);
+});
+
+test("code d'export : un code tronqué, modifié ou étranger est refusé proprement", async () => {
+  const { encodeProfile, decodeProfile } = await import('../src/meta/transfer.js');
+  const p = newProfile();
+  p.shadows = 50;
+  const code = encodeProfile(p);
+  const [pre, body, sum] = code.split('-');
+  const flipped = body[5] === 'A' ? 'B' : 'A';
+  const bad = [
+    '',
+    null,
+    'bonjour',
+    code.slice(0, -3),
+    `${pre}-${body.slice(0, 5)}${flipped}${body.slice(6)}-${sum}`,
+    `${pre}-${body}`,
+    `AUTRE1-${body}-${sum}`,
+  ];
+  for (const c of bad) {
+    const r = decodeProfile(c);
+    assert.equal(r.profile, undefined, `code accepté : ${c}`);
+    assert.equal(typeof r.error, 'string');
+  }
+});
+
+test("code d'export : un code valide mais aux valeurs absurdes est nettoyé", async () => {
+  const { decodeProfile } = await import('../src/meta/transfer.js');
+  const { hashString } = await import('../src/core/rng.js');
+  // Code fabriqué à la main avec une bonne somme de contrôle
+  const body = btoa(JSON.stringify({ v: 1, o: -40, r: { blade: 99, triche: 3 }, s: ['x', 2] }))
+    .replace(/\+/g, '.')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  const code = `BORROG1-${body}-${hashString(`BORROG1:${body}`).toString(36)}`;
+  const { profile } = decodeProfile(code);
+  assert.equal(profile.shadows, 0);
+  assert.deepEqual(profile.ranks, { blade: TREE.blade.costs.length });
+  assert.equal(profile.stats.runs, 0);
+  assert.equal(profile.stats.victories, 2);
 });
