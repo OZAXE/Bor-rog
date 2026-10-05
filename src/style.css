@@ -723,6 +723,50 @@ body {
   min-height: 1.2em;
 }
 
+/* Choix de la classe */
+#threshold .classes {
+  display: flex;
+  gap: 8px;
+  width: min(100%, 640px);
+}
+
+#threshold .class-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 6px;
+  font: 12px/1.3 var(--antique);
+  color: var(--texte);
+  background: #0b0a14;
+  border: 2px solid #4a3f7a;
+  cursor: pointer;
+}
+
+#threshold .class-card b {
+  font-size: 15px;
+  color: var(--accent);
+}
+
+#threshold .class-card span {
+  color: var(--ombre);
+}
+
+#threshold .class-card small {
+  opacity: 0.75;
+}
+
+#threshold .class-card.on {
+  border-color: var(--spectral);
+  background: linear-gradient(#173328, #0b0a14);
+  box-shadow: 0 0 14px rgba(47, 255, 134, 0.25);
+}
+
+#threshold .class-card:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* Onglets des attributs (un arbre affiché à la fois, comme dans Cyberpunk) */
 #threshold .tabs {
   display: flex;

@@ -6,6 +6,10 @@
 import { ATTRS, ATTR_IDS, ATTR_MAX, TALENTS, TALENT_IDS, TIER_LEVELS, attrLevel, rankOf, talentBlocker, talentCost } from '../meta/tree.js';
 import { buyLevel, levelCost, levelBlocker, learn, freePoints, spentPoints, resetTalents, investedShadows } from '../meta/profile.js';
 import { encodeProfile, decodeProfile } from '../meta/transfer.js';
+import { classUnlocked, selectClass } from '../meta/profile.js';
+import { CLASSES, CLASS_IDS } from '../systems/classes.js';
+
+const BOSS_NAMES = { cerberus: 'Cerbère', hydra: "l'Hydre", thanatos: 'Thanatos' };
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -17,6 +21,22 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
   const tiersEl = el('.tiers');
   const links = el('.links');
   let current = 'ares'; // onglet affiché
+
+  // ---------- Classes ----------
+  const classCards = new Map();
+  for (const id of CLASS_IDS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `class-card class-${id}`;
+    b.addEventListener('click', () => {
+      if (selectClass(profile.current, id)) {
+        onChange();
+        render();
+      }
+    });
+    el('.classes').appendChild(b);
+    classCards.set(id, b);
+  }
 
   // ---------- Onglets ----------
   const tabs = new Map();
@@ -123,6 +143,16 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
     const free = freePoints(p);
     el('.points').textContent = `${free} point${free > 1 ? 's' : ''} de talent à dépenser`;
     el('.points').classList.toggle('some', free > 0);
+
+    for (const [id, b] of classCards) {
+      const c = CLASSES[id];
+      const open = classUnlocked(p, id);
+      b.innerHTML = open
+        ? `<b>${c.name}</b><span>${c.weaponName}</span><small>${c.text}</small>`
+        : `<b>${c.name}</b><span>Verrouillée</span><small>Bats ${BOSS_NAMES[c.unlockBoss]} pour la débloquer</small>`;
+      b.disabled = !open;
+      b.classList.toggle('on', id === p.cls);
+    }
 
     for (const [id, b] of tabs) {
       b.innerHTML = `${ATTRS[id].name}<small>niveau ${attrLevel(p, id)}</small>`;

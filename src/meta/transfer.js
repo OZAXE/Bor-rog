@@ -19,7 +19,10 @@ export function encodeProfile(profile) {
     o: profile.shadows,
     a: ATTR_IDS.map((id) => profile.attrs[id]), // niveaux d'attributs, dans l'ordre d'ATTR_IDS
     t: profile.talents,
+    c: profile.cls,
+    b: profile.builds,
     s: [s.runs, s.victories, s.bestFloor, s.totalShadows],
+    k: s.bosses, // boss vaincus (déblocage des classes)
   });
   const body = toBase64Url(data);
   return `${PREFIX}-${body}-${checksum(body)}`;
@@ -48,7 +51,9 @@ export function decodeProfile(code) {
       ranks: raw.r,
       attrs: Array.isArray(raw.a) ? Object.fromEntries(ATTR_IDS.map((id, i) => [id, raw.a[i]])) : undefined,
       talents: raw.t,
-      stats: { runs: st[0], victories: st[1], bestFloor: st[2], totalShadows: st[3] },
+      cls: raw.c,
+      builds: raw.b,
+      stats: { runs: st[0], victories: st[1], bestFloor: st[2], totalShadows: st[3], bosses: raw.k },
     }),
   };
 }

@@ -16,18 +16,45 @@ import {
   talentPoints,
   pointsSpent,
 } from './tree.js';
+import { CLASSES, CLASS_IDS, classOf } from '../systems/classes.js';
 
-// Version 2 : attributs + talents (la version 1 avait un arbre simple de 13 améliorations)
-export const PROFILE_VERSION = 2;
+// Version 3 : classes (version 2 : attributs + talents ; version 1 : arbre simple)
+export const PROFILE_VERSION = 3;
+const BOSS_IDS = ['cerberus', 'hydra', 'thanatos'];
 
 export function newProfile() {
   return {
     version: PROFILE_VERSION,
     shadows: 0, // Ombres disponibles
     attrs: Object.fromEntries(ATTR_IDS.map((id) => [id, 1])), // niveaux d'attributs (1 à 10)
-    talents: {}, // rangs de talents : { id: rang }
-    stats: { runs: 0, victories: 0, bestFloor: 0, totalShadows: 0 },
+    cls: 'warrior', // classe choisie
+    talents: {}, // build de la classe choisie : { id: rang }
+    builds: {}, // builds des autres classes (rangés quand on change de classe)
+    stats: { runs: 0, victories: 0, bestFloor: 0, totalShadows: 0, bosses: newBossCount() },
   };
+}
+
+function newBossCount() {
+  return Object.fromEntries(BOSS_IDS.map((b) => [b, 0]));
+}
+
+// ---------- Classes ----------
+
+// Une classe se débloque en battant (au moins une fois) le boss indiqué
+export function classUnlocked(profile, cls) {
+  const boss = CLASSES[cls] && CLASSES[cls].unlockBoss;
+  if (CLASSES[cls] === undefined) return false;
+  return !boss || profile.stats.bosses[boss] > 0;
+}
+
+// Change de classe : le build de l'ancienne classe est rangé, celui de la nouvelle ressorti
+export function selectClass(profile, cls) {
+  if (!classUnlocked(profile, cls) || cls === profile.cls) return false;
+  profile.builds[profile.cls] = profile.talents;
+  profile.talents = profile.builds[cls] || {};
+  delete profile.builds[cls];
+  profile.cls = cls;
+  return true;
 }
 
 // Ce que la partie reçoit du profil (copie : la partie ne touche jamais au profil)
@@ -95,6 +122,7 @@ export function recordRun(profile, state) {
   const s = profile.stats;
   s.runs++;
   if (state.status === 'victory') s.victories++;
+  for (const b of state.bossesDefeated || []) if (b in s.bosses) s.bosses[b]++;
   s.bestFloor = Math.max(s.bestFloor, state.floorIndex + 1);
   s.totalShadows += earned;
   return earned;
@@ -130,6 +158,9 @@ export function sanitizeProfile(raw) {
     const meta = cleanMeta({ attrs: raw.attrs, talents: raw.talents });
     p.attrs = meta.attrs;
     p.talents = meta.talents;
+    // Builds rangés des autres classes, validés avec les mêmes attributs
+    const builds = raw.builds && typeof raw.builds === 'object' ? raw.builds : {};
+    for (const c of CLASS_IDS) if (builds[c]) p.builds[c] = cleanMeta({ attrs: p.attrs, talents: builds[c] }).talents;
   }
   const st = raw.stats || {};
   p.stats = {
@@ -137,7 +168,25 @@ export function sanitizeProfile(raw) {
     victories: count(st.victories),
     bestFloor: count(st.bestFloor),
     totalShadows: count(st.totalShadows),
+    bosses: newBossCount(),
   };
+  const bosses = st.bosses && typeof st.bosses === 'object' ? st.bosses : {};
+  for (const b of BOSS_IDS) p.stats.bosses[b] = count(bosses[b]);
+  // Profils d'avant les classes : un boss est réputé vaincu si l'étage suivant a été atteint
+  if (!st.bosses) {
+    if (p.stats.bestFloor >= 4) p.stats.bosses.cerberus = 1;
+    if (p.stats.bestFloor >= 7) p.stats.bosses.hydra = 1;
+    if (p.stats.victories > 0) p.stats.bosses.thanatos = p.stats.victories;
+  }
+  // Classe choisie (les talents actifs sont les siens). Si elle n'est pas débloquée
+  // (code trafiqué), son build est rangé et on revient au Guerrier.
+  const cls = classOf(raw.cls);
+  if (classUnlocked(p, cls)) p.cls = cls;
+  else {
+    p.builds[cls] = p.talents;
+    p.talents = p.builds.warrior || {};
+  }
+  delete p.builds[p.cls];
   return p;
 }
 

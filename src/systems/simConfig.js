@@ -14,7 +14,7 @@ export const SIM = {
     speed: 5.5, // vitesse de marche (m/s)
     acceleration: 45, // m/s² : pleine vitesse en ~0,12 s
     deceleration: 60, // m/s² : arrêt en ~0,09 s
-    maxHp: 10,
+    maxHp: 12, // Guerrier (les autres classes ont leurs propres PV, cf. SIM.classes)
     hurtInvuln: 0.8, // invulnérabilité après un coup reçu (s) : évite de mourir d'un enchaînement
     defianceInvuln: 1.5, // Défi de la Mort : invulnérabilité en se relevant (s)
 
@@ -189,6 +189,28 @@ SIM.shadows = {
   elite: 3, // élite vaincue
   floor: 5, // chaque nouvel étage atteint
   bosses: { cerberus: 25, hydra: 40, thanatos: 60 },
+};
+
+// Classes du héros (étape 7). Le Guerrier est le héros de base (SIM.player) ;
+// les autres classes remplacent certains réglages. weapon : 'sword' (arc de coup),
+// 'bow' (flèche qui touche le premier ennemi) ou 'orb' (orbe lent qui explose en zone).
+SIM.classes = {
+  warrior: { maxHp: 12, speed: 1, weapon: 'sword', attack: {} },
+  huntress: {
+    maxHp: 11,
+    speed: 1.08, // plus mobile
+    weapon: 'bow',
+    attack: { cooldown: 0.36, damage: 2, duration: 0.12, moveFactor: 0.7, knockback: 4, autoAimRange: 9 },
+    // range : portée de la flèche (m) ; pierce : ennemis traversés avant de s'arrêter
+    shot: { speed: 16, range: 9, radius: 0.15, pierce: 1 },
+  },
+  mystic: {
+    maxHp: 11,
+    speed: 1,
+    weapon: 'orb',
+    attack: { cooldown: 0.65, damage: 3, duration: 0.25, moveFactor: 0.6, knockback: 5, autoAimRange: 7 },
+    shot: { speed: 8, range: 7, radius: 0.25, blast: 1.6 }, // blast : rayon de l'explosion (m)
+  },
 };
 
 // Les boss sont aussi des "ennemis" pour les collisions et la séparation

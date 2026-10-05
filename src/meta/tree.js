@@ -45,14 +45,15 @@ export const TALENTS = {
   swift: { attr: 'ares', tier: 0, lane: 0, name: 'Bras infatigable', per: 0.06, ranks: 3, requires: [],
     text: (v) => `Coups ${pct(v)} plus rapides` },
   reach: { attr: 'ares', tier: 0, lane: 1, name: 'Allonge', per: 0.1, ranks: 2, requires: [],
-    text: (v) => `+${pct(v)} de portée des coups` },
+    text: (v) => `+${pct(v)} de portée des coups et des tirs` },
   // En pourcentage : les dégâts de base valent 1, un "+1" les doublerait d'un coup
   blade: { attr: 'ares', tier: 1, lane: 0, name: 'Lame trempée', per: 0.25, ranks: 2, requires: ['swift'],
     text: (v) => `+${pct(v)} de dégâts` },
   crit: { attr: 'ares', tier: 1, lane: 1, name: 'Coup du destin', per: 0.1, ranks: 2, requires: ['reach'],
     text: (v) => `${pct(v)} de chance d'infliger des dégâts doublés` },
   cleave: { attr: 'ares', tier: 2, lane: 0, name: 'Fendoir', per: 0.25, ranks: 2, requires: ['blade'],
-    text: (v) => `Arc de coup ${pct(v)} plus large` },
+    // Selon la classe : arc de l'épée, explosion de l'orbe, flèches qui traversent
+    text: (v) => `Coups et explosions ${pct(v)} plus larges ; flèches : traversent ${Math.round(v / 0.25)} ennemi${v > 0.25 ? 's' : ''}` },
   execute: { attr: 'ares', tier: 2, lane: 1, name: 'Exécution', per: 0.2, ranks: 1, requires: ['crit'],
     text: (v) => `Dégâts doublés sur un ennemi sous ${pct(v)} de ses PV` },
   rage: { attr: 'ares', tier: 3, lane: 0.5, name: "Rage d'Arès", per: 0.2, ranks: 1, requires: ['cleave', 'execute'],
