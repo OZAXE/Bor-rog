@@ -1,6 +1,6 @@
 # Consignes du projet
 
-Roguelike de donjon en 3D vue de dessus, action en temps réel (Vite + Three.js, JavaScript sans TypeScript), publié sur GitHub Pages : https://ozaxe.github.io/Bor-rog/
+Roguelike dans les enfers grecs, 3D isométrique inspirée de Hades, action en temps réel (Vite + Three.js, JavaScript sans TypeScript), publié sur GitHub Pages : https://ozaxe.github.io/Bor-rog/
 
 Le propriétaire du dépôt n'est pas développeur de jeux : il juge sur des résultats testés et visibles. Explications en français, tutoiement, pas de tiret long.
 
@@ -12,13 +12,20 @@ Le propriétaire du dépôt n'est pas développeur de jeux : il juge sur des ré
 - Contrôles : `event.code` (KeyW…) pour que ZQSD et WASD marchent sans réglage ; appareil détecté via `matchMedia('(pointer: coarse)')`, jamais le user-agent.
 - `base: '/Bor-rog/'` dans `vite.config.js` doit rester égal au nom du dépôt (casse comprise), en dev, preview ET build.
 
+## Direction artistique (validée : « option A », tout en code)
+
+- Caméra isométrique orthographique, fixe, au sud-est (`src/camera/isoCamera.js`). Elle ne voit que le dessus et les faces sud/est des murs.
+- Murs côté caméra abaissés selon `isLowWall` (`src/dungeon/tiles.js`) : un mur est bas s'il a du sol au nord, à l'ouest ou au nord-ouest.
+- Décor fixe d'un étage = un seul maillage + un atlas de textures dessiné en canvas (`src/render/dungeonMesh.js`, `src/render/textures.js`). Lueur des flammes peinte dans les couleurs des sommets + halos additifs, pas de vraies lumières ni de bloom.
+- Palette : ardoise bleu-vert, encre presque noire, flammes vert spectral, accents or. Personnages en cel shading (MeshToonMaterial) avec contour d'encre par coque inversée.
+
 ## Architecture (préparée pour un futur multijoueur)
 
 - `src/state/` : état pur, sérialisable en JSON (y compris l'état du générateur aléatoire).
 - `src/systems/`, `src/dungeon/` : simulation et génération pures, sans Three.js ni navigateur, exécutables dans Node. Les réglages des règles sont dans `src/systems/simConfig.js` ; `src/config.js` ne contient que l'affichage et les contrôles.
 - Génération des étages : BSP (`src/dungeon/generate.js`), générateur dérivé de (graine, numéro d'étage). Les tests vérifient sur 300 graines que chaque étage est jouable.
 - `src/render/` : lit l'état sans jamais le modifier.
-- `src/controls/` : produisent une "intention" `{ moveX, moveY, aimX, aimY, attack, dash }`.
+- `src/controls/` : produisent une "intention" `{ moveX, moveY, aimX, aimY, attack, dash }` exprimée dans le repère du MONDE (la conversion écran -> monde selon la caméra se fait côté client).
 - Boucle à pas fixe 60 Hz (`src/core/fixedStep.js`) + interpolation d'affichage.
 
 ### Déterminisme (règle stricte)
@@ -31,7 +38,7 @@ Le propriétaire du dépôt n'est pas développeur de jeux : il juge sur des ré
 
 - `npm test` (node:test, sans dépendance) ; chaque nouveau test est validé en cassant volontairement le code pour vérifier qu'il échoue.
 - `npm run build`
-- Test visuel headless (vite preview + Playwright, Chromium dans /opt/pw-browsers) en viewport PC et mobile, sans erreur console. Le rendu y est logiciel (SwiftShader) : les ips mesurés ne sont pas représentatifs.
+- Test visuel headless (vite preview + Playwright, Chromium dans /opt/pw-browsers) en viewport PC et mobile, sans erreur console. Le rendu y est logiciel (SwiftShader) : les ips mesurés ne sont pas représentatifs, et sous 12 ips le temps de jeu ralentit (rattrapage plafonné à 5 pas par image) : maintenir les touches plus longtemps dans les scripts. Google Fonts y échoue (certificat du proxy) : sans conséquence en ligne.
 
 ## Méthode de livraison (validée par le propriétaire du dépôt)
 

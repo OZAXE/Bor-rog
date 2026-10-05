@@ -4,11 +4,12 @@ import { CONFIG } from './config.js';
 import { DEVICE } from './core/device.js';
 import { createRenderer, bindResize } from './core/renderer.js';
 import { createFixedStep } from './core/fixedStep.js';
-import { createTopDownCamera } from './camera/topDownCamera.js';
+import { createIsoCamera } from './camera/isoCamera.js';
 import { createGameState } from './state/gameState.js';
 import { stepGame, STEP } from './systems/simulation.js';
 import { EMPTY_INTENT } from './systems/intent.js';
-import { createDungeonView } from './render/dungeonView.js';
+import { createDungeonView, createDungeonResources } from './render/dungeonView.js';
+import { createAtlasTexture, createHaloTexture, createToonGradient } from './render/textures.js';
 import { createPlayerView } from './render/playerView.js';
 import { createInput } from './controls/input.js';
 
@@ -35,15 +36,16 @@ const canvas = document.getElementById('scene');
 const renderer = createRenderer(canvas);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(CONFIG.render.background);
-const cam = createTopDownCamera(CONFIG.camera);
-bindResize(renderer, cam.camera);
+const cam = createIsoCamera(CONFIG.camera);
+bindResize(renderer, cam.resize);
 
-// Éclairage peu coûteux : ambiance + directionnelle douce + UNE lumière ponctuelle
-// qui suit le héros (les torches sont "peintes" dans les couleurs, cf. dungeonView)
-scene.add(new THREE.HemisphereLight(0x8a7fa0, 0x1a1418, 0.85));
-const sun = new THREE.DirectionalLight(0xffe2b8, 0.45);
-sun.position.set(-4, 10, 6);
-scene.add(sun);
+// Éclairage peu coûteux : ambiance froide + une directionnelle + UNE lumière ponctuelle
+// qui suit le héros (les flammes sont "peintes" dans les couleurs, cf. dungeonMesh)
+const L = CONFIG.lights;
+scene.add(new THREE.HemisphereLight(L.ambientSky, L.ambientGround, L.ambientIntensity));
+const key = new THREE.DirectionalLight(L.keyColor, L.keyIntensity);
+key.position.set(3, 10, 6);
+scene.add(key);
 const heroLight = new THREE.PointLight(
   CONFIG.heroLight.color,
   CONFIG.heroLight.intensity,
@@ -52,9 +54,18 @@ const heroLight = new THREE.PointLight(
 );
 scene.add(heroLight);
 
-let dungeonView = createDungeonView(scene, state.dungeon);
+// Textures dessinées par le code, créées une fois pour toute la partie
+const textures = {
+  atlas: createAtlasTexture(),
+  halo: createHaloTexture(),
+  toon: createToonGradient(),
+};
+const dungeonResources = createDungeonResources(textures);
+const makeDungeonView = () =>
+  createDungeonView(scene, state.dungeon, dungeonResources, cam.camera.quaternion);
+let dungeonView = makeDungeonView();
 let viewFloor = state.floorIndex;
-const playerView = createPlayerView(scene);
+const playerView = createPlayerView(scene, textures.toon);
 
 // ---- Entrées ----
 const input = createInput();
@@ -102,8 +113,15 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) setPlaying(false);
 });
 
+let started = false;
 function setPlaying(value) {
   playing = value;
+  // Le bandeau "Étage 1" n'apparaît qu'au vrai début de la partie
+  // (sinon il s'anime derrière l'écran titre et chevauche le titre)
+  if (value && !started) {
+    started = true;
+    showFloor(true);
+  }
   startScreen.classList.toggle('hidden', value);
   if (!value) {
     startText.innerHTML = DEVICE.isMobile ? 'Touche pour reprendre' : 'Clique pour reprendre';
@@ -111,14 +129,15 @@ function setPlaying(value) {
   loop.reset();
 }
 
-function showFloor() {
+function showFloor(withBanner) {
   floorLabel.textContent = `Étage ${state.floorIndex + 1}`;
+  if (!withBanner) return;
   banner.textContent = `Étage ${state.floorIndex + 1}`;
   banner.classList.remove('show');
   void banner.offsetWidth; // relance l'animation CSS
   banner.classList.add('show');
 }
-showFloor();
+showFloor(false);
 
 // ---- Boucle de jeu ----
 const loop = createFixedStep(STEP);
@@ -130,7 +149,7 @@ function tick() {
   prev.x = state.player.x;
   prev.z = state.player.z;
   prev.facing = state.player.facing;
-  stepGame(state, playing ? input.getIntent(aimFromMouse) : EMPTY_INTENT);
+  stepGame(state, playing ? input.getIntent(cam.screenToWorld, aimFromMouse) : EMPTY_INTENT);
 }
 
 // Compteur d'images par seconde (affichage de mise au point)
@@ -149,11 +168,11 @@ function frame(timestamp) {
   // Changement d'étage : on reconstruit le décor et on n'interpole pas (téléportation)
   if (state.floorIndex !== viewFloor) {
     dungeonView.dispose();
-    dungeonView = createDungeonView(scene, state.dungeon);
+    dungeonView = makeDungeonView();
     viewFloor = state.floorIndex;
     prev.x = state.player.x;
     prev.z = state.player.z;
-    showFloor();
+    showFloor(true);
   }
 
   const p = state.player;

@@ -2,8 +2,8 @@
 // que chaque étage produit est jouable (pas seulement "joli sur un exemple").
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateFloor, walkDistances, center, hasOpenNorth } from '../src/dungeon/generate.js';
-import { TILE, isWalkable, isSolid, tileAt } from '../src/dungeon/tiles.js';
+import { generateFloor, walkDistances, center } from '../src/dungeon/generate.js';
+import { TILE, isWalkable, isSolid, isLowWall, tileAt } from '../src/dungeon/tiles.js';
 
 const SEEDS = Array.from({ length: 300 }, (_, i) => `graine-${i}`);
 const floors = SEEDS.map((s, i) => generateFloor(s, i % 4));
@@ -81,19 +81,23 @@ test('nombre de salles raisonnable et salles typées', () => {
     assert.ok(d.rooms.length >= 6 && d.rooms.length <= 24, `${d.rooms.length} salles`);
     for (const room of d.rooms) assert.ok(types.has(room.type), room.type);
   }
-  // Sur 300 étages, il doit y avoir des trésors et des piliers quelque part
+  // Sur 300 étages, il doit y avoir des trésors, des piliers et des flammes des deux côtés
+  const faces = new Set(floors.flatMap((d) => d.decor.filter((x) => x.kind === 'torch').map((x) => x.face)));
+  assert.deepEqual([...faces].sort(), ['east', 'south']);
   assert.ok(floors.some((d) => d.rooms.some((r) => r.type === 'treasure')));
   assert.ok(floors.some((d) => d.tiles.includes(TILE.PILLAR)));
 });
 
-test('décor bien placé : torches sur des murs hauts face caméra, débris sur du sol', () => {
+test('décor bien placé : flammes sur des faces de murs hauts visibles, débris sur du sol', () => {
   for (const d of floors) {
     for (const item of d.decor) {
       if (item.kind === 'torch') {
         assert.equal(tileAt(d, item.c, item.r), TILE.WALL);
-        assert.equal(tileAt(d, item.c, item.r + 1), TILE.FLOOR);
+        // accrochée à une face visible par la caméra (sud ou est) qui donne sur du sol
+        const [dc, dr] = item.face === 'south' ? [0, 1] : item.face === 'east' ? [1, 0] : [NaN, NaN];
+        assert.equal(tileAt(d, item.c + dc, item.r + dr), TILE.FLOOR, `face ${item.face}`);
         // jamais sur un mur abaissé (elle flotterait dans le vide)
-        assert.ok(!hasOpenNorth(d, item.c, item.r), `torche sur mur bas en ${item.c},${item.r}`);
+        assert.ok(!isLowWall(d, item.c, item.r), `torche sur mur bas en ${item.c},${item.r}`);
       } else {
         assert.equal(item.kind, 'debris');
         assert.ok(!isSolid(tileAt(d, item.c, item.r)));

@@ -23,3 +23,23 @@ export function tileAt(dungeon, c, r) {
   if (c < 0 || r < 0 || c >= dungeon.width || r >= dungeon.height) return TILE.VOID;
   return dungeon.tiles[r * dungeon.width + c];
 }
+
+// Mur abaissé ? La caméra est fixe, placée au sud-est du héros et tournée vers le
+// nord-ouest. Un mur cache donc le sol situé derrière lui dans cette direction :
+// la case au nord, celle à l'ouest et celle au nord-ouest. Ces murs-là sont dessinés
+// bas pour ne jamais cacher le héros, comme dans les jeux isométriques. Les murs du
+// fond (sol seulement au sud ou à l'est) restent hauts.
+// La règle vit ici car la génération en a besoin (pas de flamme sur un mur bas).
+const BEHIND = [
+  [-1, -1],
+  [0, -1],
+  [-1, 0],
+];
+
+export function isLowWall(dungeon, c, r) {
+  for (const [dc, dr] of BEHIND) {
+    const t = tileAt(dungeon, c + dc, r + dr);
+    if (isWalkable(t) || t === TILE.PILLAR) return true;
+  }
+  return false;
+}

@@ -21,7 +21,7 @@ function updatePlayer(state, intent, dt) {
   const p = state.player;
   const cfg = SIM.player;
 
-  // Vitesse visée. Haut de l'écran = z négatif dans le monde.
+  // Vitesse visée. moveY > 0 = vers le nord = z négatif dans le monde.
   const targetVx = intent.moveX * cfg.speed;
   const targetVz = -intent.moveY * cfg.speed;
   const moving = intent.moveX !== 0 || intent.moveY !== 0;

@@ -2,7 +2,9 @@
 // C'est la seule chose que les contrôles (clavier, souris, tactile) transmettent
 // à la simulation. En multijoueur, c'est aussi ce que chaque client enverra au serveur.
 //
-// Repère : moveX > 0 = vers la droite de l'écran, moveY > 0 = vers le haut de l'écran.
+// Repère du MONDE, indépendant de la caméra : moveX > 0 = vers l'est (x croissant),
+// moveY > 0 = vers le nord (z décroissant). Ce sont les contrôles qui convertissent
+// "haut de l'écran" en direction du monde selon l'angle de la caméra.
 // aim = direction visée (même repère), nulle si le joueur ne vise pas (mobile).
 
 export const EMPTY_INTENT = Object.freeze({

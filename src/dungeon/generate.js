@@ -13,7 +13,7 @@
 // même graine + même étage = exactement le même plan, sur n'importe quelle machine.
 
 import { createRng, nextInt, nextFloat, chance, pick } from '../core/rng.js';
-import { TILE, isWalkable, tileAt } from './tiles.js';
+import { TILE, isWalkable, isLowWall, tileAt } from './tiles.js';
 
 export const DEFAULT_PARAMS = {
   width: 60, // largeur de la carte (cases)
@@ -24,7 +24,7 @@ export const DEFAULT_PARAMS = {
   corridorWidth: 2, // couloirs larges : on doit pouvoir y esquiver en combat
   treasureChance: 0.35, // probabilité qu'une petite salle devienne une salle au trésor
   pillarChance: 0.5, // probabilité de piliers dans une grande salle de combat
-  torchChance: 0.22, // probabilité d'une torche sur un mur nord éligible
+  torchChance: 0.3, // probabilité d'une flamme sur un mur éligible (face sud ou est)
   debrisChance: 0.03, // probabilité de débris (décor) sur une case de sol
 };
 
@@ -235,24 +235,25 @@ function placePillars(rng, dungeon, p) {
   }
 }
 
-// Torches : sur les murs "nord" (ceux qui ont du sol juste en dessous),
-// car ce sont ceux que la caméra voit de face. On exclut les murs qui ont aussi
-// du sol (ou un pilier) au nord : le rendu les dessine bas pour ne pas cacher
-// le héros, et une torche y flotterait dans le vide.
+// Flammes (torches) : la caméra est placée au sud-est et regarde vers le nord-ouest,
+// elle ne voit donc que les faces SUD et EST des murs. Une flamme est accrochée à
+// l'une de ces faces quand elle donne sur du sol. On exclut les murs abaissés
+// (cf. isLowWall) : une flamme y flotterait dans le vide.
 function placeTorches(rng, dungeon, p) {
-  let lastC = -10;
-  let lastR = -1;
+  const placed = [];
   for (let r = 0; r < dungeon.height; r++) {
     for (let c = 0; c < dungeon.width; c++) {
-      if (tileAt(dungeon, c, r) !== TILE.WALL) continue;
-      if (tileAt(dungeon, c, r + 1) !== TILE.FLOOR) continue;
-      if (hasOpenNorth(dungeon, c, r)) continue;
-      // Espacement minimal de 3 cases sur une même rangée
-      if (r === lastR && c - lastC < 4) continue;
+      if (tileAt(dungeon, c, r) !== TILE.WALL || isLowWall(dungeon, c, r)) continue;
+      const faces = [];
+      if (tileAt(dungeon, c, r + 1) === TILE.FLOOR) faces.push('south');
+      if (tileAt(dungeon, c + 1, r) === TILE.FLOOR) faces.push('east');
+      if (faces.length === 0) continue;
+      // Au moins 4 cases entre deux flammes, pour ne pas en tapisser les murs
+      if (placed.some((t) => Math.max(Math.abs(t.c - c), Math.abs(t.r - r)) < 4)) continue;
       if (!chance(rng, p.torchChance)) continue;
-      dungeon.decor.push({ kind: 'torch', c, r });
-      lastC = c;
-      lastR = r;
+      const torch = { kind: 'torch', c, r, face: pick(rng, faces) };
+      dungeon.decor.push(torch);
+      placed.push(torch);
     }
   }
 }
@@ -305,16 +306,6 @@ export function walkDistances(dungeon, from) {
     }
   }
   return dist;
-}
-
-// Un mur est dessiné bas (côté caméra) s'il a du sol ou un pilier au nord,
-// y compris en diagonale. Même règle que src/render/dungeonView.js.
-export function hasOpenNorth(dungeon, c, r) {
-  for (let dc = -1; dc <= 1; dc++) {
-    const north = tileAt(dungeon, c + dc, r - 1);
-    if (isWalkable(north) || north === TILE.PILLAR) return true;
-  }
-  return false;
 }
 
 function isOpenAround(dungeon, c, r) {

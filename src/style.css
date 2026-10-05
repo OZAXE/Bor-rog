@@ -6,10 +6,12 @@
 }
 
 :root {
-  --fond: #0d0b10;
-  --texte: #f1e6d0; /* parchemin */
-  --accent: #e8a33d; /* flamme de torche */
-  --voile: rgba(13, 11, 16, 0.78);
+  --fond: #05080a; /* vide des enfers */
+  --texte: #e9e2cf; /* marbre */
+  --accent: #f2c96b; /* or */
+  --spectral: #2fff86; /* flammes vertes */
+  --voile: rgba(5, 8, 10, 0.8);
+  --antique: 'Cinzel', Georgia, 'Times New Roman', serif;
 }
 
 html,
@@ -28,7 +30,7 @@ body {
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--antique);
   color: var(--texte);
 }
 
@@ -46,6 +48,14 @@ body {
   width: 100%;
   height: 100%;
   touch-action: none;
+}
+
+/* ---------- Vignettage ---------- */
+#vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.75) 100%);
 }
 
 /* ---------- HUD ---------- */
@@ -181,7 +191,10 @@ body {
   font-size: clamp(40px, 12vw, 72px);
   letter-spacing: 6px;
   color: var(--accent);
-  text-shadow: 0 0 24px rgba(232, 163, 61, 0.45);
+  font-weight: 700;
+  text-shadow:
+    0 0 24px rgba(242, 201, 107, 0.35),
+    0 0 60px rgba(47, 255, 134, 0.25);
 }
 
 #start-screen p {
@@ -191,7 +204,8 @@ body {
 }
 
 #start-screen .subtitle {
-  font-style: italic;
+  letter-spacing: 2px;
+  color: var(--spectral);
   opacity: 0.7;
   margin-bottom: 18px;
 }
