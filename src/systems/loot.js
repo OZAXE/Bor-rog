@@ -5,6 +5,10 @@
 import { SIM } from './simConfig.js';
 import { nextInt, nextFloat, chance } from '../core/rng.js';
 import { isWalkable, tileAt } from '../dungeon/tiles.js';
+import { metaValue } from '../meta/tree.js';
+
+// Œil du passeur (talent) : plus d'oboles dans les coffres et les récompenses de salle
+const withEye = (state, n) => Math.round(n * (1 + metaValue(state.player.meta, 'eye')));
 
 const L = () => SIM.loot;
 
@@ -42,7 +46,7 @@ export function dropRoomReward(state, room) {
   const l = L();
   const x = room.x + room.w / 2;
   const z = room.y + room.h / 2;
-  spawnObols(state, x, z, nextInt(state.rng, ...l.roomObols));
+  spawnObols(state, x, z, withEye(state, nextInt(state.rng, ...l.roomObols)));
   if (chance(state.rng, l.roomPotionChance)) spawnPickup(state, 'potion', x, z);
 }
 
@@ -54,7 +58,7 @@ export function updateLoot(state, dt) {
   for (const chest of state.chests) {
     if (chest.opened || Math.hypot(chest.x - p.x, chest.z - p.z) > 0.9) continue;
     chest.opened = true;
-    spawnObols(state, chest.x, chest.z, nextInt(state.rng, ...l.chestObols));
+    spawnObols(state, chest.x, chest.z, withEye(state, nextInt(state.rng, ...l.chestObols)));
     if (chance(state.rng, l.chestPotionChance)) spawnPickup(state, 'potion', chest.x, chest.z);
     state.events.push({ type: 'chestOpened', id: chest.id, x: chest.x, z: chest.z });
   }
@@ -67,7 +71,8 @@ export function updateLoot(state, dt) {
     if (it.kind === 'potion' && p.hp >= p.maxHp) return true;
     if (d <= l.pickupRadius) {
       if (it.kind === 'obol') state.gold += it.amount;
-      else p.hp = Math.min(p.maxHp, p.hp + l.potionHeal);
+      // Élixir (talent) : potions plus efficaces
+      else p.hp = Math.min(p.maxHp, p.hp + Math.round(l.potionHeal * (1 + metaValue(p.meta, 'elixir'))));
       state.events.push({ type: 'pickup', kind: it.kind, amount: it.amount, x: it.x, z: it.z });
       return false;
     }

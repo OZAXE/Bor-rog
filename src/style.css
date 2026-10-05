@@ -721,39 +721,181 @@ body {
   min-height: 1.2em;
 }
 
-#threshold .tree {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  width: min(100%, 980px);
-}
-
-/* Écrans étroits (téléphone en portrait) : 2 branches par ligne */
-@media (max-width: 640px) {
-  #threshold .tree {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.branch {
+/* Onglets des attributs (un arbre affiché à la fois, comme dans Cyberpunk) */
+#threshold .tabs {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  width: min(100%, 640px);
 }
 
-.branch h3 {
-  margin: 0;
-  font-size: 17px;
-  color: var(--accent);
-  letter-spacing: 2px;
+#threshold .tab {
+  flex: 1;
+  padding: 8px 4px;
+  font: 700 15px var(--antique);
+  color: var(--texte);
+  background: #0b0a14;
+  border: 2px solid #4a3f7a;
+  border-bottom-width: 4px;
+  cursor: pointer;
 }
 
-.branch h3 small {
+#threshold .tab small {
   display: block;
   font-size: 11px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+#threshold .tab.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: #1b1830;
+}
+
+/* Carte de l'attribut : niveau, bonus passif, achat du niveau suivant */
+#threshold .attr-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: min(100%, 640px);
+  padding: 10px 12px;
+  background: linear-gradient(#1b1830, #0b0a14);
+  border: 2px solid #4a3f7a;
+  text-align: left;
+}
+
+#threshold .attr-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#threshold .attr-name {
+  font-size: 18px;
+  color: var(--ombre);
+}
+
+#threshold .attr-level {
+  color: var(--accent);
+}
+
+#threshold .attr-bonus {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+#threshold .btn-level {
+  padding: 8px 14px;
+  font: 700 14px var(--antique);
+  color: var(--fond);
+  background: var(--accent);
+  border: 2px solid #8a6a2c;
+  cursor: pointer;
+}
+
+#threshold .btn-level small {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+#threshold .btn-level:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+#threshold .points {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+#threshold .points.some {
+  opacity: 1;
+  color: var(--spectral);
+}
+
+/* L'arbre : rangées de paliers, deux chemins, l'ultime au centre, liens en SVG derrière */
+#threshold .talents {
+  position: relative;
+  width: min(100%, 640px);
+  padding: 18px 0 4px;
+}
+
+#threshold .links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#threshold .links path {
+  fill: none;
+  stroke: #2e2850;
+  stroke-width: 2;
+}
+
+#threshold .links path.open {
+  stroke: #7a6ac0;
+}
+
+#threshold .links path.on {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+#threshold .tiers {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+#threshold .tier {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+#threshold .tier-label {
+  position: absolute;
+  left: 0;
+  top: -17px;
+  font-size: 11px;
   letter-spacing: 1px;
+  color: var(--accent);
+  opacity: 0.8;
+}
+
+#threshold .tier.closed .tier-label {
   color: var(--texte);
-  opacity: 0.6;
+  opacity: 0.45;
+}
+
+#threshold .node[data-lane='0'] {
+  grid-column: 1;
+}
+
+#threshold .node[data-lane='1'] {
+  grid-column: 2;
+}
+
+#threshold .node[data-lane='0.5'] {
+  grid-column: 1 / span 2;
+  justify-self: center;
+  width: min(100%, 300px);
+}
+
+#threshold .node.owned {
+  background: linear-gradient(#2a2148, #120f20);
+}
+
+#threshold .node.ultimate {
+  border-width: 3px;
 }
 
 .node {

@@ -11,6 +11,7 @@
 import { TILE, isWalkable, tileAt } from '../dungeon/tiles.js';
 import { pushOut } from './collision.js';
 import { SIM } from './simConfig.js';
+import { metaValue } from '../meta/tree.js';
 import { dropRoomReward } from './loot.js';
 
 export function updateRooms(state) {
@@ -68,6 +69,13 @@ function unlock(state) {
   state.lock = null;
   state.events.push({ type: 'roomCleared', roomId, doors });
   dropRoomReward(state, room);
+  // Moisson (talent) : chaque salle purifiée soigne un peu
+  const p = state.player;
+  const heal = Math.min(metaValue(p.meta, 'harvest'), p.maxHp - p.hp);
+  if (heal > 0) {
+    p.hp += heal;
+    state.events.push({ type: 'heal', amount: heal, x: p.x, z: p.z });
+  }
 }
 
 // Salle dans laquelle le héros est VRAIMENT entré : au moins une case entière
