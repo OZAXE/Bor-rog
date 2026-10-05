@@ -13,7 +13,17 @@ import { floorScaling } from '../systems/difficulty.js';
 export function populateFloor(dungeon, seed, floorIndex, spawn = SIM.spawn) {
   // Étage de boss : le boss seul dans son arène
   if (dungeon.boss) {
-    return [{ type: dungeon.boss.id, x: dungeon.boss.x, z: dungeon.boss.z, roomId: dungeon.boss.roomId, boss: true }];
+    const b = dungeon.boss;
+    const list = [{ type: b.id, x: b.x, z: b.z, roomId: b.roomId, boss: true }];
+    // L'Hydre arrive avec ses têtes, réparties en cercle autour du corps
+    if (b.id === 'hydra') {
+      const cfg = SIM.bosses.hydra;
+      for (let k = 0; k < cfg.heads; k++) {
+        const a = (k / cfg.heads) * Math.PI * 2 + Math.PI / 4;
+        list.push({ type: 'hydraHead', x: b.x + Math.cos(a) * cfg.headRing, z: b.z + Math.sin(a) * cfg.headRing, roomId: b.roomId, slot: k });
+      }
+    }
+    return list;
   }
   const rng = createRng(`${seed}/monstres-${floorIndex}`);
   const archerChance = Math.min(

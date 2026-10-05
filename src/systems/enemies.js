@@ -17,7 +17,7 @@ import { hasLineOfSight, hasClearPath, facingOf, inArc } from './geometry.js';
 import { walkDistances } from '../dungeon/generate.js';
 import { isWalkable, tileAt } from '../dungeon/tiles.js';
 import { hurtPlayer } from './player.js';
-import { cerberusBrain, resolveBossCharge } from './bosses.js';
+import { cerberusBrain, resolveBossCharge, hydraBrain, hydraHeadBrain, thanatosBrain, thanatosDoubleBrain } from './bosses.js';
 
 export function updateEnemies(state, dt) {
   const p = state.player;
@@ -52,6 +52,10 @@ export function updateEnemies(state, dt) {
       else if (e.type === 'archer') ({ mvx, mvz } = archerBrain(state, e, cfg, dx, dz, dist, ctx));
       else if (e.type === 'fury') ({ mvx, mvz } = furyBrain(state, e, cfg, dx, dz, dist, ctx));
       else if (e.type === 'cerberus') ({ mvx, mvz } = cerberusBrain(state, e, cfg, dx, dz, dist, ctx));
+      else if (e.type === 'hydra') ({ mvx, mvz } = hydraBrain(state, e, cfg, dx, dz, dist, ctx));
+      else if (e.type === 'hydraHead') ({ mvx, mvz } = hydraHeadBrain(state, e, cfg, dx, dz, dist, ctx));
+      else if (e.type === 'thanatos') ({ mvx, mvz } = thanatosBrain(state, e, cfg, dx, dz, dist, ctx));
+      else if (e.type === 'thanatosDouble') ({ mvx, mvz } = thanatosDoubleBrain(state, e, cfg, dx, dz, dist, ctx));
     }
 
     // Recul après un coup reçu, qui s'amortit
@@ -260,9 +264,11 @@ function separate(state) {
   const push = list.map(() => ({ x: 0, z: 0 }));
   for (let i = 0; i < list.length; i++) {
     const a = list[i];
+    if (a.untargetable) continue;
     const ra = SIM.enemies[a.type].radius;
     for (let j = i + 1; j < list.length; j++) {
       const b = list[j];
+      if (b.untargetable) continue;
       const min = ra + SIM.enemies[b.type].radius;
       const dx = b.x - a.x;
       const dz = b.z - a.z;
@@ -281,7 +287,7 @@ function separate(state) {
     const dz = a.z - p.z;
     const d = Math.hypot(dx, dz);
     if (d < min && d > 0) {
-      if (a.boss) {
+      if (a.boss || a.part) {
         // Un boss est trop lourd pour être poussé : c'est le héros qui recule
         const pos = { x: p.x, z: p.z };
         moveCircle(state.dungeon, pos, (-dx / d) * (min - d), (-dz / d) * (min - d), SIM.player.radius);
@@ -295,6 +301,7 @@ function separate(state) {
   }
   for (let i = 0; i < list.length; i++) {
     const e = list[i];
+    if (e.type === 'hydraHead' || e.type === 'hydra') continue; // fixés au sol
     const pos = { x: e.x, z: e.z };
     moveCircle(state.dungeon, pos, push[i].x, push[i].z, SIM.enemies[e.type].radius);
     e.x = pos.x;

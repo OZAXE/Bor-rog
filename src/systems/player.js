@@ -88,6 +88,14 @@ function resolvePlayerHit(state) {
     const r = SIM.enemies[e.type].radius;
     if (!inArc(p.x, p.z, p.facing, st.attackRange, a.arc, e.x, e.z, r)) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
+    if (e.untargetable) continue; // Thanatos disparu dans sa téléportation
+    // Un double de Thanatos s'évanouit au premier coup, sans blesser le vrai
+    if (e.type === 'thanatosDouble') {
+      e.hp = 0;
+      e.noDrop = true;
+      state.events.push({ type: 'dispel', id: e.id, x: e.x, z: e.z });
+      continue;
+    }
     if (e.invulnerable) {
       state.events.push({ type: 'deflect', id: e.id, x: e.x, z: e.z });
       continue;
@@ -97,7 +105,7 @@ function resolvePlayerHit(state) {
     e.alert = true;
     // Recul dans l'axe du coup : éloigne l'ennemi et interrompt sa préparation.
     // Un boss, lui, ne recule pas et ne se laisse pas interrompre.
-    if (!e.boss) {
+    if (!e.boss && !e.part) {
       e.kvx = dir.x * a.knockback;
       e.kvz = dir.z * a.knockback;
       if (e.mode === 'windup') {
@@ -117,15 +125,21 @@ function resolvePlayerHit(state) {
       }
     }
     state.projectiles = [];
+    state.hazards = [];
     state.events.push({ type: 'bossDefeated', id: deadBoss.id, bossType: deadBoss.type, x: deadBoss.x, z: deadBoss.z });
     dropBossReward(state, deadBoss);
+    // Thanatos vaincu : c'est la victoire de la partie
+    if (deadBoss.type === 'thanatos') {
+      state.status = 'victory';
+      state.events.push({ type: 'victory' });
+    }
   }
   // Retrait des ennemis vaincus
   const before = state.enemies.length;
   state.enemies = state.enemies.filter((e) => {
     if (e.hp > 0) return true;
     state.events.push({ type: 'enemyDied', id: e.id, enemyType: e.type, x: e.x, z: e.z, boss: e.boss });
-    if (!e.boss && !e.noDrop) dropFromEnemy(state, e);
+    if (!e.boss && !e.part && !e.noDrop) dropFromEnemy(state, e);
     // Tribut d'Hadès : la vie revient au fil des ennemis vaincus
     if (st.killsPerHeal && ++p.killsSinceHeal >= st.killsPerHeal) {
       p.killsSinceHeal = 0;
@@ -145,6 +159,7 @@ export function autoAimTarget(state) {
   let best = null;
   let bestScore = Infinity;
   for (const e of state.enemies) {
+    if (e.untargetable) continue;
     const dist = Math.hypot(e.x - p.x, e.z - p.z);
     if (dist > SIM.player.attack.autoAimRange * (playerStats(p).attackRange / SIM.player.attack.range)) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;

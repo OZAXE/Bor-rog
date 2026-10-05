@@ -11,7 +11,8 @@
 // puis ses charges vont par deux.
 
 import { SIM, ticks } from './simConfig.js';
-import { nextInt } from '../core/rng.js';
+import { nextInt, nextFloat } from '../core/rng.js';
+import { addHazard } from './hazards.js';
 import { facingOf, inArc } from './geometry.js';
 import { hurtPlayer } from './player.js';
 import { approachDir } from './enemies.js';
@@ -179,6 +180,349 @@ function summonShades(state, e, count) {
       add.summoned = true;
       state.enemies.push(add);
       state.events.push({ type: 'summon', id: add.id, x, z });
+      break;
+    }
+  }
+}
+
+// ===========================================================================
+// L'Hydre de Lerne
+// Le corps ne bouge pas : il gère ses têtes (repousse, cautérisation) et, en
+// phase 2, fait jaillir des flaques de lave annoncées autour du héros.
+// ===========================================================================
+
+export function hydraBrain(state, e) {
+  const b = SIM.bosses.hydra;
+  const p = state.player;
+  e.facing = facingOf(p.x - e.x, p.z - e.z);
+  const still = { mvx: 0, mvz: 0 };
+
+  // Premier pas : on recense les têtes de départ, une par emplacement
+  if (!e.slots) {
+    // Recensement par EMPLACEMENT (et non par tête vivante) : une tête tranchée avant
+    // ce tout premier pas est ainsi bien prise en compte, et repoussera
+    const list = state.enemies.filter((h) => h.type === 'hydraHead');
+    e.slots = [];
+    for (let k = 0; k < b.heads; k++) {
+      const h = list.find((x) => x.slot === k);
+      e.slots.push({ slot: k, headId: h ? h.id : null, regrow: h ? 0 : ticks(b.regrow), sealed: false });
+    }
+    e.lastHp = e.hp;
+    // Premières attaques décalées : synchronisées, les têtes cracheraient un mur de projectiles
+    for (const h of list) h.timer = ticks(1.2 + h.slot * 0.65);
+  }
+  const alive = new Set(state.enemies.map((h) => h.id));
+
+  // Frapper le corps cautérise les moignons : ces têtes-là ne repousseront plus
+  if (e.hp < e.lastHp) {
+    for (const s of e.slots) {
+      if (s.headId === null && !s.sealed) {
+        s.sealed = true;
+        state.events.push({ type: 'cauterize', slot: s.slot, ...slotPos(e, s.slot, e.slots.length) });
+      }
+    }
+  }
+  e.lastHp = e.hp;
+
+  for (const s of e.slots) {
+    if (s.headId !== null && !alive.has(s.headId)) {
+      s.headId = null;
+      s.regrow = ticks(b.regrow);
+      state.events.push({ type: 'headSevered', slot: s.slot, ...slotPos(e, s.slot, e.slots.length) });
+    } else if (s.headId === null && !s.sealed && --s.regrow <= 0) {
+      s.headId = spawnHead(state, e, s.slot, e.slots.length).id;
+      state.events.push({ type: 'headRegrow', slot: s.slot, ...slotPos(e, s.slot, e.slots.length) });
+    }
+  }
+
+  // Seconde phase : une tête de plus, et des flaques de lave régulières
+  if (!e.phase2 && e.hp <= e.maxHp * b.phase2.at) {
+    e.phase2 = true;
+    const total = e.slots.length + b.phase2.extraHeads;
+    for (let k = e.slots.length; k < total; k++) e.slots.push({ slot: k, headId: null, regrow: 1, sealed: false });
+    // Les têtes se répartissent à nouveau sur le cercle
+    for (const s of e.slots) {
+      const h = state.enemies.find((x) => x.id === s.headId);
+      if (h) Object.assign(h, slotPos(e, s.slot, total));
+    }
+    e.poolTimer = ticks(1);
+    state.events.push({ type: 'howl', id: e.id, x: e.x, z: e.z });
+  }
+  if (e.phase2 && --e.poolTimer <= 0) {
+    const ph = b.phase2;
+    e.poolTimer = nextInt(state.rng, ticks(ph.poolEvery[0]), ticks(ph.poolEvery[1]));
+    const a = nextFloat(state.rng) * Math.PI * 2;
+    const r = nextFloat(state.rng) * 1.2;
+    addHazard(state, {
+      kind: 'lava',
+      x: p.x + Math.cos(a) * r,
+      z: p.z + Math.sin(a) * r,
+      r: ph.poolRadius,
+      warn: ticks(ph.poolWarn),
+      life: ticks(ph.poolLife),
+      damage: ph.poolDamage,
+    });
+  }
+  return still;
+}
+
+function slotPos(body, slot, total) {
+  const a = (slot / total) * Math.PI * 2 + Math.PI / 4;
+  const r = SIM.bosses.hydra.headRing;
+  return { x: body.x + Math.cos(a) * r, z: body.z + Math.sin(a) * r };
+}
+
+function spawnHead(state, body, slot, total) {
+  const pos = slotPos(body, slot, total);
+  const h = createEnemy(state, { type: 'hydraHead', x: pos.x, z: pos.z, slot });
+  h.alert = true;
+  h.mode = 'chase';
+  h.timer = ticks(1.2); // une tête qui repousse ne mord pas tout de suite
+  state.enemies.push(h);
+  return h;
+}
+
+// Une tête : fixe ; mord si le héros est proche, crache un éventail sinon
+export function hydraHeadBrain(state, e, cfg, dx, dz, dist) {
+  const b = SIM.bosses.hydra;
+  const still = { mvx: 0, mvz: 0 };
+  e.facing = facingOf(dx, dz);
+  switch (e.mode) {
+    case 'chase':
+      if (--e.timer > 0) return still;
+      e.attack = dist <= b.bite.trigger ? 'bite' : 'spit';
+      e.mode = 'windup';
+      e.timer = ticks(b[e.attack].windup);
+      e.windupTotal = e.timer;
+      e.aimX = dx / (dist || 1);
+      e.aimZ = dz / (dist || 1);
+      state.events.push({ type: 'windup', id: e.id, attack: e.attack });
+      return still;
+    case 'windup': {
+      if (--e.timer > 0) return still;
+      const aim = Math.atan2(e.aimX, e.aimZ);
+      if (e.attack === 'bite') {
+        state.events.push({ type: 'strike', id: e.id, x: e.x, z: e.z, facing: aim });
+        if (inArc(e.x, e.z, aim, b.bite.range, b.bite.arc, state.player.x, state.player.z, SIM.player.radius)) {
+          hurtPlayer(state, b.bite.damage, e.x, e.z);
+        }
+      } else {
+        const sp = b.spit;
+        for (let k = 0; k < sp.count; k++) {
+          const a = aim + (k - (sp.count - 1) / 2) * sp.spread;
+          state.projectiles.push({
+            id: state.nextId++,
+            x: e.x + Math.sin(a) * 0.5,
+            z: e.z + Math.cos(a) * 0.5,
+            vx: Math.sin(a) * sp.speed,
+            vz: Math.cos(a) * sp.speed,
+            travelLeft: sp.range,
+            damage: sp.damage,
+            kind: 'venom',
+          });
+        }
+        state.events.push({ type: 'shoot', id: e.id, x: e.x, z: e.z });
+      }
+      e.mode = 'chase';
+      e.timer = nextInt(state.rng, ticks(b.headCooldown[0]), ticks(b.headCooldown[1]));
+      return still;
+    }
+    default:
+      e.mode = 'chase';
+      e.timer = ticks(1);
+      return still;
+  }
+}
+
+// ===========================================================================
+// Thanatos, la Mort
+// ===========================================================================
+
+export function thanatosBrain(state, e, cfg, dx, dz, dist, ctx) {
+  const b = SIM.bosses.thanatos;
+  const p = state.player;
+  const still = { mvx: 0, mvz: 0 };
+  // Phase 3 : plus rapide, préparations plus courtes
+  const fast = e.phase3 ? b.phase3 : { speed: 1, windup: 1 };
+  const windup = (s) => Math.max(1, Math.round(ticks(s) * fast.windup));
+
+  // Phases : doubles illusoires à 50 % (et à nouveau s'ils ont tous disparu), accélération à 25 %
+  if (!e.phase2 && e.hp <= e.maxHp * b.phase2.at) {
+    e.phase2 = true;
+    e.resummon = 0;
+  }
+  if (!e.phase3 && e.hp <= e.maxHp * b.phase3.at) {
+    e.phase3 = true;
+    state.events.push({ type: 'howl', id: e.id, x: e.x, z: e.z });
+  }
+  if (e.phase2 && e.mode !== 'vanish' && !state.enemies.some((d) => d.type === 'thanatosDouble')) {
+    if (--e.resummon <= 0) {
+      summonDoubles(state, e, b.phase2.doubles);
+      e.resummon = ticks(b.phase2.resummon);
+    }
+  }
+
+  switch (e.mode) {
+    case 'chase': {
+      e.facing = facingOf(dx, dz);
+      if (--e.timer > 0) {
+        if (dist <= b.keepDistance) return still;
+        const dir = approachDir(state, e, cfg, ctx);
+        return { mvx: dir.x * b.speed * fast.speed, mvz: dir.z * b.speed * fast.speed };
+      }
+      // Faux si le héros est à portée, sinon il alterne pluie d'âmes et téléportation
+      if (dist <= b.reap.radius * 0.8) return begin('reap', windup(b.reap.windup));
+      e.cycle = (e.cycle || 0) + 1;
+      return e.cycle % 2 ? castRain() : vanish();
+    }
+    case 'windup':
+      if (--e.timer > 0) return still;
+      return release();
+    case 'vanish':
+      if (--e.timer > 0) return still;
+      // Réapparition derrière le héros, puis un coup de faux rapide
+      e.x = e.blinkX;
+      e.z = e.blinkZ;
+      e.untargetable = false;
+      e.invulnerable = false;
+      state.events.push({ type: 'appear', id: e.id, x: e.x, z: e.z });
+      return begin('slash', windup(b.blink.slashWindup));
+    case 'recover':
+      if (--e.timer <= 0) {
+        e.mode = 'chase';
+        e.timer = nextInt(state.rng, ticks(b.pause[0] / fast.speed), ticks(b.pause[1] / fast.speed));
+      }
+      return still;
+    default:
+      e.mode = 'chase';
+      e.timer = ticks(b.pause[0]);
+      return still;
+  }
+
+  function begin(kind, t) {
+    const ddx = p.x - e.x;
+    const ddz = p.z - e.z;
+    const d = Math.hypot(ddx, ddz) || 1;
+    e.mode = 'windup';
+    e.attack = kind;
+    e.timer = t;
+    e.windupTotal = t;
+    e.aimX = ddx / d;
+    e.aimZ = ddz / d;
+    e.facing = facingOf(ddx, ddz);
+    state.events.push({ type: 'windup', id: e.id, attack: kind });
+    return still;
+  }
+
+  function release() {
+    if (e.attack === 'reap') {
+      state.events.push({ type: 'reap', id: e.id, x: e.x, z: e.z, r: b.reap.radius });
+      if (Math.hypot(p.x - e.x, p.z - e.z) < b.reap.radius + SIM.player.radius) hurtPlayer(state, b.reap.damage, e.x, e.z);
+      return recover(b.reap.recover);
+    }
+    // 'slash' (après la téléportation)
+    state.events.push({ type: 'strike', id: e.id, x: e.x, z: e.z, facing: e.facing });
+    if (inArc(e.x, e.z, e.facing, b.blink.slashRange, b.blink.slashArc, p.x, p.z, SIM.player.radius)) {
+      hurtPlayer(state, b.blink.damage, e.x, e.z);
+    }
+    return recover(b.blink.recover);
+  }
+
+  function recover(seconds) {
+    e.mode = 'recover';
+    e.timer = ticks(seconds);
+    return still;
+  }
+
+  // Pluie d'âmes : des cercles annoncés autour du héros (le premier pile sur lui)
+  function castRain() {
+    const r = b.rain;
+    for (let k = 0; k < r.count; k++) {
+      const a = nextFloat(state.rng) * Math.PI * 2;
+      const d = k === 0 ? 0 : 1 + nextFloat(state.rng) * (r.spread - 1);
+      addHazard(state, { kind: 'soul', x: p.x + Math.cos(a) * d, z: p.z + Math.sin(a) * d, r: r.radius, warn: windup(r.warn), damage: r.damage });
+    }
+    state.events.push({ type: 'rain', id: e.id, x: e.x, z: e.z });
+    e.attack = 'rain';
+    return recover(r.recover);
+  }
+
+  // Téléportation : il disparaît et choisit un point DERRIÈRE le héros
+  function vanish() {
+    const bl = b.blink;
+    const back = { x: -Math.sin(p.facing), z: -Math.cos(p.facing) };
+    let tx = p.x + back.x * bl.behind;
+    let tz = p.z + back.z * bl.behind;
+    if (!isWalkable(tileAt(state.dungeon, Math.floor(tx), Math.floor(tz)))) {
+      // Pas de place derrière : il réapparaît là où il était
+      tx = e.x;
+      tz = e.z;
+    }
+    e.blinkX = tx;
+    e.blinkZ = tz;
+    e.mode = 'vanish';
+    e.attack = 'blink';
+    e.timer = windup(bl.vanish);
+    e.windupTotal = e.timer;
+    e.untargetable = true;
+    e.invulnerable = true;
+    state.events.push({ type: 'vanish', id: e.id, x: e.x, z: e.z, tx, tz });
+    return still;
+  }
+}
+
+// Un double : se déplace comme Thanatos et prépare des coups de faux (moins forts).
+// Il s'évanouit au premier coup reçu (cf. player.js).
+export function thanatosDoubleBrain(state, e, cfg, dx, dz, dist, ctx) {
+  const b = SIM.bosses.thanatos;
+  const p = state.player;
+  const still = { mvx: 0, mvz: 0 };
+  e.facing = facingOf(dx, dz);
+  switch (e.mode) {
+    case 'chase':
+      if (--e.timer > 0) {
+        if (dist <= b.keepDistance) return still;
+        const dir = approachDir(state, e, cfg, ctx);
+        return { mvx: dir.x * b.speed, mvz: dir.z * b.speed };
+      }
+      if (dist > b.reap.radius * 0.9) {
+        e.timer = ticks(0.3);
+        const dir = approachDir(state, e, cfg, ctx);
+        return { mvx: dir.x * b.speed, mvz: dir.z * b.speed };
+      }
+      e.mode = 'windup';
+      e.attack = 'reap';
+      e.timer = ticks(b.reap.windup);
+      e.windupTotal = e.timer;
+      state.events.push({ type: 'windup', id: e.id, attack: 'reap' });
+      return still;
+    case 'windup':
+      if (--e.timer > 0) return still;
+      state.events.push({ type: 'reap', id: e.id, x: e.x, z: e.z, r: b.reap.radius });
+      if (Math.hypot(p.x - e.x, p.z - e.z) < b.reap.radius + SIM.player.radius) hurtPlayer(state, b.reap.damage - 1, e.x, e.z);
+      e.mode = 'chase';
+      e.timer = nextInt(state.rng, ticks(1.2), ticks(2.2));
+      return still;
+    default:
+      e.mode = 'chase';
+      e.timer = ticks(1);
+      return still;
+  }
+}
+
+function summonDoubles(state, e, count) {
+  for (let k = 0; k < count; k++) {
+    const a = (k / count) * Math.PI * 2 + 1.1;
+    for (const r of [2.5, 1.8, 1.2]) {
+      const x = e.x + Math.cos(a) * r;
+      const z = e.z + Math.sin(a) * r;
+      if (!isWalkable(tileAt(state.dungeon, Math.floor(x), Math.floor(z)))) continue;
+      const d = createEnemy(state, { type: 'thanatosDouble', x, z });
+      d.alert = true;
+      d.mode = 'chase';
+      d.timer = ticks(0.8);
+      state.enemies.push(d);
+      state.events.push({ type: 'summon', id: d.id, x, z });
       break;
     }
   }

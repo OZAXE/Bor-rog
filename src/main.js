@@ -15,6 +15,7 @@ import { createEnemyViews, createProjectileView } from './render/enemyViews.js';
 import { createEffects } from './render/effects.js';
 import { createGateView } from './render/gateView.js';
 import { createLootView } from './render/lootView.js';
+import { createHazardView } from './render/hazardView.js';
 import { BOONS } from './systems/boons.js';
 import { rerollCost } from './systems/descent.js';
 import { SIM } from './systems/simConfig.js';
@@ -108,6 +109,7 @@ const projectileView = createProjectileView(scene);
 const effects = createEffects(scene, textures.halo);
 const gateView = createGateView(scene, textures.halo);
 const lootView = createLootView(scene, textures.toon, textures.halo);
+const hazardView = createHazardView(scene, textures.halo);
 
 // ---- Entrées ----
 const input = createInput(canvas);
@@ -215,7 +217,7 @@ function updateHud() {
   // Boss : barre de vie en haut de l'écran, dès que le combat commence
   const boss = state.enemies.find((e) => e.boss);
   const bossBar = $('boss-bar');
-  if (boss && boss.alert) {
+  if (boss && boss.alert && state.status === 'playing') {
     bossBar.classList.remove('hidden');
     $('boss-name').textContent = SIM.bosses[boss.type].name;
     $('boss-fill').style.width = `${(100 * Math.max(0, boss.hp)) / boss.maxHp}%`;
@@ -223,7 +225,7 @@ function updateHud() {
   // Salle verrouillée : nombre d'ennemis encore à vaincre
   const lockEl = $('lock-info');
   // Pendant un combat de boss, la barre du boss suffit (le compteur ferait doublon)
-  if (state.lock && !(boss && boss.alert)) {
+  if (state.lock && state.status === 'playing' && !(boss && boss.alert)) {
     const alive = new Set(state.enemies.map((e) => e.id));
     const left = state.lock.enemyIds.filter((id) => alive.has(id)).length;
     lockEl.textContent = `Salle scellée · ${left} ennemi${left > 1 ? 's' : ''}`;
@@ -296,11 +298,26 @@ function showDeath() {
     `<small>Graine ${seed}</small>`;
   deathScreen.classList.remove('hidden');
 }
+const victoryScreen = $('victory-screen');
+function showVictory() {
+  const secs = Math.floor(state.tick / SIM.tickRate);
+  const time = `${Math.floor(secs / 60)} min ${String(secs % 60).padStart(2, '0')} s`;
+  const boons = Object.entries(state.player.boons)
+    .map(([id, k]) => BOONS[id].name + (k > 1 ? ` ×${k}` : ''))
+    .join(', ');
+  $('victory-text').innerHTML =
+    `Descente en ${time} · ${state.kills} ennemis vaincus · ${state.gold} oboles<br>` +
+    (boons ? `Bienfaits : ${boons}<br>` : '') +
+    `<small>Graine ${seed}</small>`;
+  victoryScreen.classList.remove('hidden');
+}
+
 function restart(newSeed) {
   seed = newSeed;
   state = createGameState(seed);
   window.__game.state = state;
   deathScreen.classList.add('hidden');
+  victoryScreen.classList.add('hidden');
   prev.x = state.player.x;
   prev.z = state.player.z;
   prev.facing = state.player.facing;
@@ -314,6 +331,8 @@ function restart(newSeed) {
   deathTimer = 0;
 }
 $('btn-retry').addEventListener('click', () => restart(seed));
+$('btn-victory-retry').addEventListener('click', () => restart(seed));
+$('btn-victory-new').addEventListener('click', () => restart(randomSeed()));
 $('btn-new').addEventListener('click', () => restart(randomSeed()));
 
 function rebuildFloor() {
@@ -349,7 +368,10 @@ function tick() {
       const boss = state.enemies.find((e) => e.boss);
       showBanner(boss ? SIM.bosses[boss.type].name.split(',')[0] : 'Salle scellée', 'danger');
     }
-    if (ev.type === 'bossDefeated') showBanner(`${SIM.bosses[ev.bossType].name.split(',')[0]} est vaincu`, 'calm');
+    if (ev.type === 'bossDefeated') {
+      const name = SIM.bosses[ev.bossType].name.split(',')[0];
+      showBanner(`${name} ${ev.bossType === 'hydra' ? 'est vaincue' : 'est vaincu'}`, 'calm');
+    }
     // Arène de boss purifiée : on garde le bandeau de victoire affiché juste avant
     if (ev.type === 'roomCleared' && state.dungeon.rooms.find((r) => r.id === ev.roomId)?.type !== 'boss') {
       showBanner('Salle purifiée', 'calm');
@@ -404,6 +426,7 @@ function frame(timestamp) {
   effects.update(dt);
   gateView.update(state, dt, time);
   lootView.update(state, time, dt);
+  hazardView.update(state, time);
   updateCharon();
 
   const shake = effects.shakeOffset();
@@ -411,10 +434,11 @@ function frame(timestamp) {
   dungeonView.update(time);
   updateHud();
 
-  // Mort : on laisse une seconde pour voir la scène avant l'écran de fin
-  if (state.status === 'dead') {
+  // Mort ou victoire : on laisse un instant pour voir la scène avant l'écran de fin
+  if (state.status === 'dead' || state.status === 'victory') {
     deathTimer += dt;
-    if (deathTimer > 1 && deathScreen.classList.contains('hidden')) showDeath();
+    if (state.status === 'dead' && deathTimer > 1 && deathScreen.classList.contains('hidden')) showDeath();
+    if (state.status === 'victory' && deathTimer > 2 && victoryScreen.classList.contains('hidden')) showVictory();
   }
 
   renderer.render(scene, cam.camera);
