@@ -25,14 +25,13 @@ export function createRenderer(canvas) {
   return renderer;
 }
 
-// Adapte la taille du rendu et la caméra à la fenêtre
-export function bindResize(renderer, camera) {
+// Adapte la taille du rendu à la fenêtre ; onResize(largeur, hauteur) recadre la caméra
+export function bindResize(renderer, onResize) {
   const resize = () => {
     const w = window.innerWidth;
     const h = window.innerHeight;
     renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    onResize(w, h);
   };
   window.addEventListener('resize', resize);
   // Sur mobile, la rotation de l'écran ne déclenche pas toujours "resize" tout de suite

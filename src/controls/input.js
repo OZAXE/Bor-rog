@@ -11,12 +11,15 @@ export function createInput() {
   const touch = DEVICE.isMobile ? createTouchControls(CONFIG.controls) : null;
 
   return {
-    // aimFromMouse(x, y) : fournie par le rendu, convertit la position de la souris
-    // à l'écran en direction de visée { x, y } dans le repère de l'intention (ou null)
-    getIntent(aimFromMouse) {
+    // L'intention est exprimée dans le repère du MONDE (indépendant de la caméra),
+    // pour que la simulation, et plus tard le serveur, n'aient pas à connaître la vue.
+    // screenToWorld(x, y) : convertit une direction écran en direction monde
+    // aimFromMouse(x, y) : convertit la position de la souris en direction de visée (ou null)
+    getIntent(screenToWorld, aimFromMouse) {
       const t = touch ? touch.getMove() : { x: 0, y: 0 };
       // Le joystick est prioritaire s'il est utilisé
-      const move = t.x !== 0 || t.y !== 0 ? t : kb.getMove();
+      const screenMove = t.x !== 0 || t.y !== 0 ? t : kb.getMove();
+      const move = screenToWorld(screenMove.x, screenMove.y);
       // Sur mobile, on ignore la souris : certains navigateurs émettent des événements
       // "souris" après un toucher, qui figeraient l'orientation du héros
       const mouse = touch ? null : kb.getMouse();
