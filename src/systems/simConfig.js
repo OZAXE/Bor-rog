@@ -69,6 +69,20 @@ export const SIM = {
       arrowDamage: 1,
       arrowRange: 12, // distance max parcourue par une flèche (m)
     },
+
+    fury: {
+      radius: 0.32,
+      hp: 3,
+      speed: 2.4, // approche lente...
+      aggroRange: 9,
+      chargeRange: 6.5, // distance à laquelle elle annonce sa charge
+      windup: 0.75, // annonce (s) : la bande rouge montre la trajectoire
+      chargeSpeed: 13, // ... charge très rapide (m/s)
+      chargeDistance: 7.5, // longueur max de la charge (m)
+      damage: 2,
+      recover: 0.8, // étourdie après la charge (s)
+      wallStun: 1.6, // étourdie plus longtemps si elle percute un mur (s)
+    },
   },
 
   // Peuplement des étages
@@ -78,9 +92,13 @@ export const SIM = {
     perArea: 45, // +1 ennemi par tranche de 45 cases de surface de salle
     maxPerRoom: 8,
     archerChance: 0.25, // proportion d'archers au premier étage
-    archerChancePerFloor: 0.07,
-    maxArcherChance: 0.5,
+    archerChancePerFloor: 0.03,
+    maxArcherChance: 0.35, // plafonds archers + Furies : il reste toujours au moins 35 % d'Ombres
     safeDistance: 4, // aucun ennemi à moins de 4 cases du départ
+    furyFromFloor: 2, // les Furies apparaissent à partir du 3e étage (index 2)...
+    furyChance: 0.18, // ... avec cette proportion
+    furyChancePerFloor: 0.03,
+    maxFuryChance: 0.3,
   },
 };
 

@@ -4,9 +4,10 @@
 // du plan : on peut ainsi régler le nombre d'ennemis sans changer la forme des
 // étages déjà connus (une graine partagée garde le même plan).
 
-import { createRng, nextInt, chance, shuffle } from '../core/rng.js';
+import { createRng, nextInt, nextFloat, chance, shuffle } from '../core/rng.js';
 import { TILE, tileAt } from './tiles.js';
 import { SIM } from '../systems/simConfig.js';
+import { floorScaling } from '../systems/difficulty.js';
 
 // Renvoie la liste des ennemis (sans identifiant : c'est l'état qui les numérote)
 export function populateFloor(dungeon, seed, floorIndex, spawn = SIM.spawn) {
@@ -15,6 +16,11 @@ export function populateFloor(dungeon, seed, floorIndex, spawn = SIM.spawn) {
     spawn.maxArcherChance,
     spawn.archerChance + spawn.archerChancePerFloor * floorIndex,
   );
+  const furyChance =
+    floorIndex >= spawn.furyFromFloor
+      ? Math.min(spawn.maxFuryChance, spawn.furyChance + spawn.furyChancePerFloor * (floorIndex - spawn.furyFromFloor))
+      : 0;
+  const eliteChance = floorScaling(floorIndex).eliteChance;
   const enemies = [];
 
   for (const room of dungeon.rooms) {
@@ -45,8 +51,11 @@ export function populateFloor(dungeon, seed, floorIndex, spawn = SIM.spawn) {
       if (taken.length >= wanted) break;
       if (taken.some((t) => Math.abs(t.c - s.c) <= 1 && Math.abs(t.r - s.r) <= 1)) continue;
       taken.push(s);
+      const roll = nextFloat(rng);
+      const type = roll < furyChance ? 'fury' : roll < furyChance + archerChance ? 'archer' : 'shade';
       enemies.push({
-        type: chance(rng, archerChance) ? 'archer' : 'shade',
+        type,
+        elite: chance(rng, eliteChance),
         x: s.c + 0.5,
         z: s.r + 0.5,
         roomId: room.id,

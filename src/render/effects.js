@@ -96,7 +96,7 @@ export function createEffects(scene, haloTexture) {
           shake = Math.max(shake, 0.06);
           break;
         case 'enemyDied':
-          burst(ev.x, 0.6, ev.z, 26, ev.enemyType === 'shade' ? 0x8a5cff : 0xe8e0c8, 3.5, 0.6);
+          burst(ev.x, 0.6, ev.z, 26, ev.enemyType === 'shade' ? 0x8a5cff : ev.enemyType === 'fury' ? 0xd8333f : 0xe8e0c8, 3.5, 0.6);
           burst(ev.x, 0.6, ev.z, 12, 0x2fff86, 2, 0.8);
           shake = Math.max(shake, 0.1);
           break;
@@ -106,6 +106,11 @@ export function createEffects(scene, haloTexture) {
           break;
         case 'arrowBreak':
           burst(ev.x, 0.7, ev.z, 5, 0xffd27a, 1.5, 0.2);
+          break;
+        case 'crash':
+          // Furie qui percute un mur : gerbe de poussière et petit tremblement
+          burst(ev.x, 0.6, ev.z, 14, 0xb9a98c, 2.5, 0.5);
+          shake = Math.max(shake, 0.12);
           break;
         case 'pickup':
           burst(ev.x, 0.4, ev.z, ev.kind === 'obol' ? 4 : 10, ev.kind === 'obol' ? 0xf2c96b : 0xff5a6a, 1.2, 0.35);
