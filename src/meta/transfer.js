@@ -7,13 +7,20 @@
 
 import { hashString } from '../core/rng.js';
 import { sanitizeProfile, PROFILE_VERSION } from './profile.js';
+import { ATTR_IDS } from './tree.js';
 
 const PREFIX = 'BORROG1';
 
 export function encodeProfile(profile) {
   const s = profile.stats;
   // Forme compacte pour un code plus court
-  const data = JSON.stringify({ v: PROFILE_VERSION, o: profile.shadows, r: profile.ranks, s: [s.runs, s.victories, s.bestFloor, s.totalShadows] });
+  const data = JSON.stringify({
+    v: PROFILE_VERSION,
+    o: profile.shadows,
+    a: ATTR_IDS.map((id) => profile.attrs[id]), // niveaux d'attributs, dans l'ordre d'ATTR_IDS
+    t: profile.talents,
+    s: [s.runs, s.victories, s.bestFloor, s.totalShadows],
+  });
   const body = toBase64Url(data);
   return `${PREFIX}-${body}-${checksum(body)}`;
 }
@@ -34,9 +41,13 @@ export function decodeProfile(code) {
   if (!raw || typeof raw !== 'object') return { error: 'Code illisible.' };
   const st = Array.isArray(raw.s) ? raw.s : [];
   return {
+    // Version 1 (avant la refonte en attributs) : r = rangs de l'ancien arbre, remboursés
     profile: sanitizeProfile({
+      version: raw.v,
       shadows: raw.o,
       ranks: raw.r,
+      attrs: Array.isArray(raw.a) ? Object.fromEntries(ATTR_IDS.map((id, i) => [id, raw.a[i]])) : undefined,
+      talents: raw.t,
       stats: { runs: st[0], victories: st[1], bestFloor: st[2], totalShadows: st[3] },
     }),
   };

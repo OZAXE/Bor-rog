@@ -8,17 +8,18 @@ import { bossOf } from '../dungeon/zones.js';
 import { populateFloor } from '../dungeon/populate.js';
 import { SIM, ticks } from '../systems/simConfig.js';
 import { enemyStats } from '../systems/difficulty.js';
-import { cleanRanks, metaValue, rankOf } from '../meta/tree.js';
+import { cleanMeta, metaValue, rankOf, attrValue } from '../meta/tree.js';
+import { startPact } from '../systems/descent.js';
 
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
 
 // options.enemies : false pour un donjon vide (tests d'exploration)
 // options.dungeonParams : réglages du générateur d'étages (tests)
-// options.meta : rangs de l'arbre des améliorations permanentes ({ id: rang }, cf. src/meta/tree.js)
+// options.meta : améliorations permanentes { attrs, talents } (cf. src/meta/tree.js)
 export function createGameState(seed, options = {}) {
   // Améliorations permanentes apportées par le joueur (même graine + mêmes rangs = même partie)
-  const meta = cleanRanks(options.meta);
-  const maxHp = SIM.player.maxHp + metaValue(meta, 'vigor');
+  const meta = cleanMeta(options.meta);
+  const maxHp = SIM.player.maxHp + metaValue(meta, 'vigor') + Math.floor(attrValue(meta, 'demeter'));
   const state = {
     version: STATE_VERSION,
     seed: String(seed),
@@ -43,7 +44,7 @@ export function createGameState(seed, options = {}) {
       facing: 0, // orientation (radians, 0 = vers le sud, z croissant)
       hp: maxHp,
       maxHp,
-      meta, // rangs de l'arbre permanent (lus par playerStats)
+      meta, // attributs et talents permanents (lus par playerStats)
       defiance: rankOf(meta, 'defiance') > 0 ? 1 : 0, // relèvements restants (Défi de la Mort)
       // Compteurs en pas de simulation (0 = inactif)
       attackTimer: 0, // durée restante du coup en cours
@@ -51,6 +52,9 @@ export function createGameState(seed, options = {}) {
       dashTimer: 0, // durée restante de l'esquive en cours
       dashCooldown: 0, // recharge de la prochaine esquive
       dashCharges: 1 + rankOf(meta, 'doubleDash'), // esquives disponibles
+      rage: 0, // Rage d'Arès : pas restants de cadence accrue
+      afterDash: 0, // Élan : pas restants pendant lesquels le prochain coup est renforcé
+      danceHits: [], // Danse des lames : ennemis déjà frappés par l'esquive en cours
       dashX: 0, // direction de l'esquive
       dashZ: 0,
       dashHeld: false, // bouton d'esquive déjà enfoncé au pas précédent (une esquive par appui)
@@ -70,6 +74,8 @@ export function createGameState(seed, options = {}) {
     events: [],
   };
   enterFloor(state, 0);
+  // Pacte de Charon : la partie commence par le choix d'un bienfait
+  if (rankOf(meta, 'pact')) startPact(state);
   return state;
 }
 

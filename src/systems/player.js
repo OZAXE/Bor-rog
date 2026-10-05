@@ -6,7 +6,7 @@ import { hasLineOfSight, facingOf, dirOf, inArc, angleBetween } from './geometry
 import { playerStats } from './boons.js';
 import { dropFromEnemy, dropBossReward } from './loot.js';
 import { nextFloat } from '../core/rng.js';
-import { metaValue } from '../meta/tree.js';
+import { metaValue, rankOf } from '../meta/tree.js';
 
 export function updatePlayer(state, intent, dt) {
   const p = state.player;
@@ -32,8 +32,11 @@ export function updatePlayer(state, intent, dt) {
     p.dashTimer = ticks(cfg.dash.duration);
     p.dashCharges--;
     if (p.dashCooldown === 0) p.dashCooldown = ticks(st.dashCooldown);
-    p.invuln = Math.max(p.invuln, ticks(cfg.dash.invuln));
+    p.invuln = Math.max(p.invuln, ticks(st.dashInvuln));
     p.attackTimer = 0; // l'esquive annule le coup en cours
+    // Élan : le premier coup qui suit de près l'esquive est renforcé
+    if (st.momentum) p.afterDash = ticks(cfg.dash.duration + 0.6);
+    p.danceHits = [];
     p.facing = facingOf(p.dashX, p.dashZ);
     state.events.push({ type: 'dash', x: p.x, z: p.z });
   }
@@ -57,6 +60,7 @@ export function updatePlayer(state, intent, dt) {
   moveCircle(state.dungeon, pos, p.vx * dt, p.vz * dt, cfg.radius);
   p.x = pos.x;
   p.z = pos.z;
+  if (p.dashTimer > 0 && st.bladeDance) danceStrike(state, st);
   // Contre un mur, la vitesse réelle est celle du déplacement effectué
   p.vx = (p.x - before.x) / dt;
   p.vz = (p.z - before.z) / dt;
@@ -77,7 +81,7 @@ export function updatePlayer(state, intent, dt) {
     }
     p.attackTimer = ticks(cfg.attack.duration);
     p.attackCooldown = ticks(st.attackCooldown);
-    state.events.push({ type: 'swing', x: p.x, z: p.z, facing: p.facing });
+    state.events.push({ type: 'swing', x: p.x, z: p.z, facing: p.facing, range: st.attackRange, arc: st.attackArc });
     resolvePlayerHit(state);
   }
 }
@@ -85,16 +89,31 @@ export function updatePlayer(state, intent, dt) {
 // Le coup touche tous les ennemis dans l'arc, à portée, et visibles (pas à travers un mur)
 function resolvePlayerHit(state) {
   const p = state.player;
-  const a = SIM.player.attack;
   const st = playerStats(p);
   const dir = dirOf(p.facing);
+  // Élan : bonus sur le premier coup après une esquive (consommé même si le coup rate)
+  const bonus = p.afterDash > 0 ? st.momentum : 0;
+  p.afterDash = 0;
   for (const e of state.enemies) {
     const r = SIM.enemies[e.type].radius;
-    if (!inArc(p.x, p.z, p.facing, st.attackRange, a.arc, e.x, e.z, r)) continue;
+    if (!inArc(p.x, p.z, p.facing, st.attackRange, st.attackArc, e.x, e.z, r)) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
-    damageEnemy(state, e, st.damage, dir);
+    damageEnemy(state, e, st.damage + bonus, dir);
   }
   removeDeadEnemies(state);
+}
+
+// Danse des lames : pendant l'esquive, chaque ennemi traversé est frappé une fois
+function danceStrike(state, st) {
+  const p = state.player;
+  let hit = false;
+  for (const e of state.enemies) {
+    if (e.hp <= 0 || p.danceHits.includes(e.id)) continue;
+    if (Math.hypot(e.x - p.x, e.z - p.z) > SIM.enemies[e.type].radius + SIM.player.radius + 0.35) continue;
+    p.danceHits.push(e.id);
+    if (damageEnemy(state, e, st.damage, { x: p.dashX, z: p.dashZ })) hit = true;
+  }
+  if (hit) removeDeadEnemies(state);
 }
 
 // Inflige des dégâts du héros à un ennemi (coup ou projectile renvoyé).
@@ -121,6 +140,8 @@ export function damageEnemy(state, e, amount, dir) {
     dmg *= 2;
     crit = true;
   }
+  // Exécution : dégâts doublés sur un ennemi déjà bien entamé
+  if (st.executeBelow && e.hp <= e.maxHp * st.executeBelow) dmg *= 2;
   e.hp -= dmg;
   e.hitFlash = ticks(0.12);
   e.alert = true;
@@ -158,6 +179,13 @@ export function removeDeadEnemies(state) {
     state.events.push({ type: 'bossDefeated', id: deadBoss.id, bossType: deadBoss.type, x: deadBoss.x, z: deadBoss.z });
     dropBossReward(state, deadBoss);
     state.shadows += sh.bosses[deadBoss.type] || 0;
+    // Moisson (talent) : chaque boss vaincu rend le héros plus robuste
+    const grow = metaValue(p.meta, 'harvest');
+    if (grow) {
+      p.maxHp += grow;
+      p.hp += grow;
+      state.events.push({ type: 'heal', amount: grow, x: p.x, z: p.z });
+    }
     // Thanatos vaincu : c'est la victoire de la partie
     if (deadBoss.type === 'thanatos') {
       state.status = 'victory';
@@ -182,7 +210,10 @@ export function removeDeadEnemies(state) {
     }
     return false;
   });
-  state.kills += before - state.enemies.length;
+  const killed = before - state.enemies.length;
+  state.kills += killed;
+  // Rage d'Arès : cadence accrue pendant 3 s après avoir vaincu un ennemi
+  if (killed > 0 && rankOf(p.meta, 'rage')) p.rage = ticks(3);
 }
 
 // Sans visée (mobile) : l'ennemi le plus proche à portée, en privilégiant ceux devant
@@ -236,6 +267,8 @@ function tickDown(p, st) {
     if (p.dashCharges < st.dashCharges) p.dashCooldown = ticks(st.dashCooldown);
   }
   if (p.invuln > 0) p.invuln--;
+  if (p.rage > 0) p.rage--;
+  if (p.afterDash > 0) p.afterDash--;
 }
 
 function approach(value, target, maxDelta) {

@@ -61,8 +61,8 @@
 
       <!-- Écran de Charon : choix d'un bienfait entre deux étages -->
       <div id="charon" class="hidden">
-        <h2>Charon, le passeur</h2>
-        <p class="hint">Choisis un bienfait des dieux pour descendre</p>
+        <h2 id="charon-title">Charon, le passeur</h2>
+        <p class="hint" id="charon-hint">Choisis un bienfait des dieux pour descendre</p>
         <div id="boon-cards"></div>
         <div class="shop">
           <button id="btn-heal" type="button"></button>
@@ -93,19 +93,29 @@
         </div>
       </div>
 
-      <!-- Le Seuil : arbre des améliorations permanentes, entre deux parties -->
+      <!-- Le Seuil : attributs et arbres de talents, entre deux parties -->
       <div id="threshold" class="hidden">
         <header>
           <h2>Le Seuil</h2>
           <p class="shadows"></p>
           <p class="gained"></p>
         </header>
-        <div class="tree"></div>
+        <!-- Un onglet par attribut ; un seul arbre affiché à la fois -->
+        <nav class="tabs"></nav>
+        <section class="attr-card">
+          <div class="attr-info"><b class="attr-name"></b><span class="attr-level"></span><span class="attr-bonus"></span></div>
+          <button class="btn-level" type="button"></button>
+        </section>
+        <p class="points"></p>
+        <div class="talents">
+          <svg class="links" aria-hidden="true"></svg>
+          <div class="tiers"></div>
+        </div>
         <p class="stats"></p>
         <div class="buttons">
           <button class="btn-descend" type="button">Descendre</button>
           <button class="btn-same-seed" type="button">Rejouer la même graine</button>
-          <button class="btn-refund" type="button">Reprendre mes Ombres</button>
+          <button class="btn-refund" type="button">Reprendre mes talents</button>
         </div>
         <div class="buttons small">
           <button class="btn-export" type="button">Exporter ma progression</button>

@@ -1,47 +1,65 @@
-// Le Seuil : écran entre deux parties. On y dépense ses Ombres dans l'arbre des
-// améliorations permanentes, puis on redescend. Interface HTML (pensée pour le
-// tactile) ; les règles d'achat sont dans src/meta/profile.js.
+// Le Seuil : écran entre deux parties, façon arbres de talents de Cyberpunk 2.0.
+// On y monte ses attributs avec les Ombres (chaque niveau = 1 point de talent) et
+// on dépense ses points dans l'arbre de chaque attribut. Un onglet par attribut,
+// un arbre dessiné (nœuds + liens). Les règles sont dans src/meta/ (tree.js, profile.js).
 
-import { TREE, NODE_IDS, BRANCHES, rankOf } from '../meta/tree.js';
-import { buy, buyBlocker, nextCost, refundAll, spentShadows } from '../meta/profile.js';
+import { ATTRS, ATTR_IDS, ATTR_MAX, TALENTS, TALENT_IDS, TIER_LEVELS, attrLevel, rankOf, talentBlocker, talentCost } from '../meta/tree.js';
+import { buyLevel, levelCost, levelBlocker, learn, freePoints, spentPoints, resetTalents, investedShadows } from '../meta/profile.js';
 import { encodeProfile, decodeProfile } from '../meta/transfer.js';
 
-// profile : profil du joueur (modifié ici par les achats, puis sauvegardé via onChange)
+const SVG = 'http://www.w3.org/2000/svg';
+
+// profile : conteneur { current } du profil (modifié ici, puis sauvegardé via onChange)
 // onChange() : appelé après chaque achat ou remise à zéro
 // onDescend(sameSeed) : lance une nouvelle partie (sameSeed = rejouer la même graine)
 export function createThreshold({ root, profile, onChange, onDescend }) {
   const el = (sel) => root.querySelector(sel);
-  const tree = el('.tree');
+  const tiersEl = el('.tiers');
+  const links = el('.links');
+  let current = 'ares'; // onglet affiché
 
-  // Une colonne par branche, un bouton par nœud (créés une fois, mis à jour ensuite)
-  const buttons = new Map();
-  for (const b of BRANCHES) {
-    const col = document.createElement('section');
-    col.className = `branch branch-${b.id}`;
-    col.innerHTML = `<h3>${b.name}<small>${b.theme}</small></h3>`;
-    for (const id of NODE_IDS.filter((n) => TREE[n].branch === b.id)) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'node';
-      btn.addEventListener('click', () => {
-        if (buy(profile.current, id)) {
-          onChange();
-          render();
-        }
-      });
-      col.appendChild(btn);
-      buttons.set(id, btn);
-    }
-    tree.appendChild(col);
+  // ---------- Onglets ----------
+  const tabs = new Map();
+  for (const id of ATTR_IDS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `tab tab-${id}`;
+    b.addEventListener('click', () => {
+      current = id;
+      render();
+    });
+    el('.tabs').appendChild(b);
+    tabs.set(id, b);
   }
+
+  // ---------- Nœuds de talents (tous créés une fois ; seuls ceux de l'onglet sont affichés) ----------
+  const nodes = new Map();
+  for (const id of TALENT_IDS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'node';
+    btn.addEventListener('click', () => {
+      if (learn(profile.current, id)) {
+        onChange();
+        render();
+      }
+    });
+    nodes.set(id, btn);
+  }
+
+  el('.btn-level').addEventListener('click', () => {
+    if (buyLevel(profile.current, current)) {
+      onChange();
+      render();
+    }
+  });
 
   el('.btn-descend').addEventListener('click', () => onDescend(false));
   el('.btn-same-seed').addEventListener('click', () => onDescend(true));
   el('.btn-refund').addEventListener('click', () => {
-    const spent = spentShadows(profile.current);
-    if (!spent) return;
-    if (!window.confirm(`Reprendre les ${spent} Ombres investies ? Toutes les améliorations seront retirées.`)) return;
-    refundAll(profile.current);
+    if (!spentPoints(profile.current)) return;
+    if (!window.confirm('Reprendre tous tes points de talent ? Tes niveaux d\'attributs restent acquis.')) return;
+    resetTalents(profile.current);
     onChange();
     render();
   });
@@ -86,7 +104,7 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
     }
     const next = result.profile;
     const cur = profile.current;
-    const describe = (p) => `${p.shadows + spentShadows(p)} Ombres au total, ${p.stats.runs} descentes`;
+    const describe = (p) => `${p.shadows + investedShadows(p)} Ombres au total, ${p.stats.runs} descentes`;
     if (!window.confirm(`Remplacer ta progression (${describe(cur)}) par celle du code (${describe(next)}) ?`)) return;
     profile.current = next;
     onChange();
@@ -97,32 +115,97 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
   function render() {
     const p = profile.current;
     el('.shadows').textContent = `${p.shadows} Ombre${p.shadows > 1 ? 's' : ''}`;
-    const s = p.stats;
+    const st = p.stats;
     el('.stats').textContent =
-      `${s.runs} descente${s.runs > 1 ? 's' : ''} · ${s.victories} victoire${s.victories > 1 ? 's' : ''}` +
-      ` · meilleur étage : ${s.bestFloor || '-'}`;
-    el('.btn-refund').disabled = spentShadows(p) === 0;
-    for (const [id, btn] of buttons) {
-      const n = TREE[id];
-      const r = rankOf(p.ranks, id);
-      const max = n.costs.length;
-      const blocker = buyBlocker(p, id);
-      const cost = nextCost(p, id);
-      // Effet affiché : celui du rang suivant, ou du rang atteint si le nœud est complet
-      const shown = Math.max(1, Math.min(r + 1, max));
-      let foot;
-      if (blocker === 'verrouillé') foot = `Requiert ${TREE[n.requires].name}`;
-      else if (blocker === 'maximum') foot = 'Complet';
-      else foot = `${cost} Ombres`;
-      btn.innerHTML =
-        `<b>${n.name}</b><span>${n.text(n.per * shown)}</span>` +
-        `<i>${'◆'.repeat(r)}${'◇'.repeat(max - r)}</i><small>${foot}</small>`;
-      btn.disabled = blocker !== '';
-      btn.classList.toggle('locked', blocker === 'verrouillé');
-      btn.classList.toggle('owned', r > 0);
-      btn.classList.toggle('full', blocker === 'maximum');
+      `${st.runs} descente${st.runs > 1 ? 's' : ''} · ${st.victories} victoire${st.victories > 1 ? 's' : ''}` +
+      ` · meilleur étage : ${st.bestFloor || '-'}`;
+    el('.btn-refund').disabled = spentPoints(p) === 0;
+    const free = freePoints(p);
+    el('.points').textContent = `${free} point${free > 1 ? 's' : ''} de talent à dépenser`;
+    el('.points').classList.toggle('some', free > 0);
+
+    for (const [id, b] of tabs) {
+      b.innerHTML = `${ATTRS[id].name}<small>niveau ${attrLevel(p, id)}</small>`;
+      b.classList.toggle('on', id === current);
+    }
+
+    // Carte de l'attribut : niveau, bonus passif, achat du niveau suivant
+    const a = ATTRS[current];
+    const lvl = attrLevel(p, current);
+    el('.attr-name').textContent = `${a.name} · ${a.theme}`;
+    el('.attr-level').textContent = `Niveau ${lvl} / ${ATTR_MAX}`;
+    el('.attr-bonus').textContent = lvl > 1 ? a.bonus(lvl - 1) : 'Aucun bonus pour l\'instant';
+    const lb = el('.btn-level');
+    const blocker = levelBlocker(p, current);
+    lb.disabled = blocker !== '';
+    lb.innerHTML =
+      blocker === 'maximum'
+        ? 'Niveau maximum'
+        : `Monter au niveau ${lvl + 1}<small>${levelCost(p, current)} Ombres · +1 point · ${a.bonus(lvl)}</small>`;
+
+    // Arbre : une rangée par palier, deux chemins, l'ultime au centre
+    tiersEl.innerHTML = '';
+    TIER_LEVELS.forEach((need, tier) => {
+      const row = document.createElement('div');
+      row.className = `tier${lvl >= need ? '' : ' closed'}`;
+      row.innerHTML = `<span class="tier-label">Niv. ${need}</span>`;
+      for (const id of TALENT_IDS.filter((t) => TALENTS[t].attr === current && TALENTS[t].tier === tier)) {
+        const t = TALENTS[id];
+        const btn = nodes.get(id);
+        const r = rankOf(p, id);
+        const why = talentBlocker(p, id);
+        const shown = Math.max(1, Math.min(r + 1, t.ranks)); // effet au rang suivant (ou atteint)
+        let foot;
+        if (why === 'palier') foot = `${a.name} niveau ${need} requis`;
+        else if (why === 'verrouillé') foot = `Requiert ${t.requires.map((q) => TALENTS[q].name).join(' ou ')}`;
+        else if (why === 'maximum') foot = 'Complet';
+        else if (why === 'pas de point') foot = `${talentCost(id)} point${talentCost(id) > 1 ? 's' : ''} requis`;
+        else foot = `${talentCost(id)} point${talentCost(id) > 1 ? 's' : ''}`;
+        btn.innerHTML =
+          `<b>${t.name}</b><span>${t.text(t.per * shown)}</span>` +
+          `<i>${'◆'.repeat(r)}${'◇'.repeat(t.ranks - r)}</i><small>${foot}</small>`;
+        btn.disabled = why !== '';
+        btn.dataset.lane = String(t.lane);
+        btn.classList.toggle('owned', r > 0);
+        btn.classList.toggle('full', why === 'maximum');
+        btn.classList.toggle('ultimate', tier === TIER_LEVELS.length - 1);
+        btn.classList.toggle('locked', why === 'palier' || why === 'verrouillé');
+        row.appendChild(btn);
+      }
+      tiersEl.appendChild(row);
+    });
+    // Les liens se tracent une fois les nœuds placés à l'écran
+    requestAnimationFrame(drawLinks);
+  }
+
+  // Liens parent -> enfant entre les nœuds (dorés quand les deux sont pris)
+  function drawLinks() {
+    const box = links.getBoundingClientRect();
+    if (!box.width) return;
+    links.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
+    links.innerHTML = '';
+    const p = profile.current;
+    for (const id of TALENT_IDS) {
+      const t = TALENTS[id];
+      if (t.attr !== current) continue;
+      for (const parent of t.requires) {
+        const a = nodes.get(parent).getBoundingClientRect();
+        const b = nodes.get(id).getBoundingClientRect();
+        const line = document.createElementNS(SVG, 'path');
+        const x1 = a.left + a.width / 2 - box.left;
+        const y1 = a.bottom - box.top;
+        const x2 = b.left + b.width / 2 - box.left;
+        const y2 = b.top - box.top;
+        const my = (y1 + y2) / 2;
+        line.setAttribute('d', `M${x1} ${y1} C${x1} ${my} ${x2} ${my} ${x2} ${y2}`);
+        line.setAttribute('class', rankOf(p, parent) && rankOf(p, id) ? 'on' : rankOf(p, parent) ? 'open' : '');
+        links.appendChild(line);
+      }
     }
   }
+  window.addEventListener('resize', () => {
+    if (!root.classList.contains('hidden')) drawLinks();
+  });
 
   return {
     // gained : Ombres de la partie qui vient de finir (0 = pas de message)

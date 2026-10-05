@@ -10,7 +10,10 @@ const MAX_PARTICLES = 220;
 export function createEffects(scene, haloTexture) {
   // ---------- Arc de coup (croissant blanc, comme dans Hades) ----------
   const a = SIM.player.attack;
-  const swingGeo = new THREE.RingGeometry(0.45, a.range, 24, 1, -Math.PI / 2 - a.arc / 2, a.arc).rotateX(-Math.PI / 2);
+  // Croissant aux dimensions du coup (portée et arc changent avec Allonge et Fendoir)
+  const crescent = (range, arc) => new THREE.RingGeometry(0.45, range, 24, 1, -Math.PI / 2 - arc / 2, arc).rotateX(-Math.PI / 2);
+  let swingKey = `${a.range}/${a.arc}`;
+  const swingGeo = crescent(a.range, a.arc);
   const swingMat = new THREE.MeshBasicMaterial({
     color: 0xf4fff8,
     transparent: true,
@@ -85,12 +88,19 @@ export function createEffects(scene, haloTexture) {
     // Réagit aux événements d'un pas de simulation
     handle(ev) {
       switch (ev.type) {
-        case 'swing':
+        case 'swing': {
+          const k = `${ev.range ?? a.range}/${ev.arc ?? a.arc}`;
+          if (k !== swingKey) {
+            swingKey = k;
+            swing.geometry.dispose();
+            swing.geometry = crescent(ev.range ?? a.range, ev.arc ?? a.arc);
+          }
           swing.position.x = ev.x;
           swing.position.z = ev.z;
           swing.rotation.y = ev.facing;
           swingLife = swingDuration;
           break;
+        }
         case 'hit':
           burst(ev.x, 0.6, ev.z, 8, 0xffffff, 3, 0.25);
           // Coup du destin : gerbe dorée et petit tremblement en plus

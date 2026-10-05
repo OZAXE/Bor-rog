@@ -17,12 +17,12 @@ import { createGateView } from './render/gateView.js';
 import { createLootView } from './render/lootView.js';
 import { createHazardView } from './render/hazardView.js';
 import { BOONS } from './systems/boons.js';
-import { rerollCost } from './systems/descent.js';
+import { rerollCost, healCost } from './systems/descent.js';
 import { SIM } from './systems/simConfig.js';
 import { ZONE_THEMES } from './render/zoneThemes.js';
 import { zoneOf, FLOORS_PER_ZONE } from './dungeon/zones.js';
 import { createInput } from './controls/input.js';
-import { recordRun } from './meta/profile.js';
+import { recordRun, metaOf } from './meta/profile.js';
 import { loadProfile, saveProfile } from './ui/storage.js';
 import { createThreshold } from './ui/threshold.js';
 
@@ -48,7 +48,7 @@ let seed = params.get('seed') || randomSeed();
 // Objet conteneur : l'écran du Seuil et la boucle partagent le même profil
 const profile = { current: loadProfile() };
 // Chaque partie démarre avec les améliorations permanentes achetées au Seuil
-const newState = (s) => createGameState(s, { meta: profile.current.ranks });
+const newState = (s) => createGameState(s, { meta: metaOf(profile.current) });
 
 // ---- État ----
 let state = newState(seed);
@@ -255,15 +255,20 @@ let pendingAction = null;
 let charonKey = '';
 const charon = $('charon');
 function updateCharon() {
-  const open = state.status === 'choosing';
+  // Seulement en cours de partie (avec le Pacte, l'état démarre en choix dès sa création)
+  const open = state.status === 'choosing' && started && !threshold.isOpen();
   charon.classList.toggle('hidden', !open);
   if (!open) {
     charonKey = '';
     return;
   }
-  const key = JSON.stringify([state.offer.boons, state.offer.rerolls, state.gold, state.player.hp]);
+  const key = JSON.stringify([state.offer.boons, state.offer.rerolls, state.offer.free, state.gold, state.player.hp]);
   if (key === charonKey) return;
   charonKey = key;
+  // Pacte de Charon : choix d'un bienfait au départ, sans descendre
+  const pact = !!state.offer.start;
+  $('charon-title').textContent = pact ? 'Pacte de Charon' : 'Charon, le passeur';
+  $('charon-hint').textContent = pact ? 'Choisis le bienfait qui t\'accompagnera' : 'Choisis un bienfait des dieux pour descendre';
   const cards = $('boon-cards');
   cards.innerHTML = '';
   state.offer.boons.forEach((id, i) => {
@@ -286,8 +291,8 @@ function updateCharon() {
   }
   const p = state.player;
   const heal = $('btn-heal');
-  heal.textContent = `Se soigner +${SIM.loot.healAmount} PV · ${SIM.loot.healCost} oboles`;
-  heal.disabled = state.gold < SIM.loot.healCost || p.hp >= p.maxHp;
+  heal.textContent = `Se soigner +${SIM.loot.healAmount} PV · ${healCost(state)} oboles`;
+  heal.disabled = state.gold < healCost(state) || p.hp >= p.maxHp;
   const reroll = $('btn-reroll');
   reroll.textContent = `Autres bienfaits · ${rerollCost(state)} oboles`;
   reroll.disabled = state.gold < rerollCost(state);
