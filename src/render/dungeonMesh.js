@@ -98,8 +98,8 @@ export function buildDungeonMesh(dungeon, options = {}) {
     for (let c = 0; c < dungeon.width; c++) {
       const t = tileAt(dungeon, c, r);
 
-      // ---------- Sol (aussi sous les piliers ; pas sous l'escalier : c'est un trou) ----------
-      if (t === TILE.FLOOR || t === TILE.PILLAR) {
+      // ---------- Sol (aussi sous les piliers et les grilles ; pas sous l'escalier : c'est un trou) ----------
+      if (t === TILE.FLOOR || t === TILE.PILLAR || t === TILE.GATE) {
         const cell = cellRect(ATLAS.floor[floorVariant(c, r)]);
         // Ombre de contact : chaque coin est d'autant plus sombre qu'il touche de murs
         const cornerShade = (x, z) => {

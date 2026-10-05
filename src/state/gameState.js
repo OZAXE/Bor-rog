@@ -7,7 +7,7 @@ import { generateFloor } from '../dungeon/generate.js';
 import { populateFloor } from '../dungeon/populate.js';
 import { SIM, ticks } from '../systems/simConfig.js';
 
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 // options.enemies : false pour un donjon vide (tests d'exploration)
 // options.dungeonParams : réglages du générateur d'étages (tests)
@@ -45,6 +45,8 @@ export function createGameState(seed, options = {}) {
     },
     enemies: [],
     projectiles: [],
+    // Salle verrouillée en cours : { roomId, doors, enemyIds } ou null
+    lock: null,
     // Ce qui s'est passé pendant le DERNIER pas (coups, morts…), pour que le rendu
     // affiche des effets. Vidé à chaque pas : ce n'est pas une mémoire de la partie.
     events: [],
@@ -67,6 +69,7 @@ export function enterFloor(state, floorIndex) {
 
   state.projectiles = [];
   state.enemies = [];
+  state.lock = null;
   if (state.options.enemies) {
     for (const e of populateFloor(state.dungeon, state.seed, floorIndex)) {
       state.enemies.push(createEnemy(state, e));

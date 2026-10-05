@@ -107,6 +107,10 @@ export function createEffects(scene, haloTexture) {
         case 'arrowBreak':
           burst(ev.x, 0.7, ev.z, 5, 0xffd27a, 1.5, 0.2);
           break;
+        case 'roomCleared':
+          // Les grilles se dissipent en étincelles vertes
+          for (const d of ev.doors) burst(d.c + 0.5, 0.8, d.r + 0.5, 4, 0x2fff86, 1.5, 0.7);
+          break;
         case 'dash':
           puff.position.x = ev.x;
           puff.position.z = ev.z;

@@ -7,6 +7,7 @@ import { sanitizeIntent } from './intent.js';
 import { updatePlayer } from './player.js';
 import { updateEnemies } from './enemies.js';
 import { updateProjectiles } from './projectiles.js';
+import { updateRooms } from './rooms.js';
 import { TILE, tileAt } from '../dungeon/tiles.js';
 import { enterFloor } from '../state/gameState.js';
 
@@ -21,7 +22,9 @@ export function stepGame(state, rawIntent) {
   updatePlayer(state, intent, STEP);
   updateEnemies(state, STEP);
   updateProjectiles(state, STEP);
-  if (state.status === 'playing') checkStairs(state);
+  if (state.status !== 'playing') return;
+  updateRooms(state);
+  checkStairs(state);
 }
 
 // Marcher sur le centre de l'escalier fait descendre à l'étage suivant

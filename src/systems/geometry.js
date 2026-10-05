@@ -43,3 +43,19 @@ export function inArc(x, z, facing, range, arc, tx, tz, targetRadius = 0) {
   if (dist < 0.3) return true; // collé : toujours touché
   return angleBetween(facing, facingOf(dx, dz)) <= arc / 2;
 }
+
+// Un corps de rayon "radius" peut-il aller en ligne droite de A à B ? On teste
+// la ligne centrale et les deux lignes qui longent ses flancs : une ligne fine
+// peut frôler un pilier là où le corps, lui, se cognerait.
+export function hasClearPath(dungeon, x0, z0, x1, z1, radius) {
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  const len = Math.hypot(dx, dz) || 1;
+  const ox = (-dz / len) * radius;
+  const oz = (dx / len) * radius;
+  return (
+    hasLineOfSight(dungeon, x0, z0, x1, z1) &&
+    hasLineOfSight(dungeon, x0 + ox, z0 + oz, x1 + ox, z1 + oz) &&
+    hasLineOfSight(dungeon, x0 - ox, z0 - oz, x1 - ox, z1 - oz)
+  );
+}

@@ -7,11 +7,12 @@ export const TILE = {
   WALL: 2, // mur (bord d'une salle ou d'un couloir)
   PILLAR: 3, // pilier au milieu d'une salle
   STAIRS: 4, // escalier vers l'étage suivant (praticable)
+  GATE: 5, // grille dressée dans un passage pendant qu'une salle est verrouillée
 };
 
 // Case bloquante pour les déplacements ?
 export function isSolid(tile) {
-  return tile === TILE.VOID || tile === TILE.WALL || tile === TILE.PILLAR;
+  return tile === TILE.VOID || tile === TILE.WALL || tile === TILE.PILLAR || tile === TILE.GATE;
 }
 
 export function isWalkable(tile) {

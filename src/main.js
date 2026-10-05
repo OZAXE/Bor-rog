@@ -13,6 +13,7 @@ import { createAtlasTexture, createHaloTexture, createToonGradient } from './ren
 import { createPlayerView } from './render/playerView.js';
 import { createEnemyViews, createProjectileView } from './render/enemyViews.js';
 import { createEffects } from './render/effects.js';
+import { createGateView } from './render/gateView.js';
 import { createInput } from './controls/input.js';
 
 // ---------------------------------------------------------------------------
@@ -74,6 +75,7 @@ const playerView = createPlayerView(scene, textures.toon);
 const enemyViews = createEnemyViews(scene, textures.toon, cam.camera.quaternion);
 const projectileView = createProjectileView(scene);
 const effects = createEffects(scene, textures.halo);
+const gateView = createGateView(scene, textures.halo);
 
 // ---- Entrées ----
 const input = createInput(canvas);
@@ -141,9 +143,12 @@ function setPlaying(value) {
 
 function showFloor(withBanner) {
   $('floor-label').textContent = `Étage ${state.floorIndex + 1}`;
-  if (!withBanner) return;
-  banner.textContent = `Étage ${state.floorIndex + 1}`;
-  banner.classList.remove('show');
+  if (withBanner) showBanner(`Étage ${state.floorIndex + 1}`);
+}
+
+function showBanner(text, kind = '') {
+  banner.textContent = text;
+  banner.className = kind;
   void banner.offsetWidth; // relance l'animation CSS
   banner.classList.add('show');
 }
@@ -162,6 +167,14 @@ function updateHud() {
   healthFill.style.width = `${(100 * p.hp) / p.maxHp}%`;
   healthText.textContent = `${p.hp} / ${p.maxHp}`;
   $('kills').textContent = `${state.kills} vaincu${state.kills > 1 ? 's' : ''}`;
+  // Salle verrouillée : nombre d'ennemis encore à vaincre
+  const lockEl = $('lock-info');
+  if (state.lock) {
+    const alive = new Set(state.enemies.map((e) => e.id));
+    const left = state.lock.enemyIds.filter((id) => alive.has(id)).length;
+    lockEl.textContent = `Salle scellée · ${left} ennemi${left > 1 ? 's' : ''}`;
+    lockEl.classList.add('on');
+  } else lockEl.classList.remove('on');
 }
 
 // ---- Mort et nouvelle partie ----
@@ -182,6 +195,7 @@ function restart(newSeed) {
   prev.z = state.player.z;
   prev.facing = state.player.facing;
   prevEnemies.clear();
+  gateView.reset();
   showSeed();
   rebuildFloor();
   updateHud();
@@ -215,6 +229,8 @@ function tick() {
   stepGame(state, playing ? input.getIntent(cam.screenToWorld, aimFromMouse) : EMPTY_INTENT);
   for (const ev of state.events) {
     effects.handle(ev);
+    if (ev.type === 'roomLocked') showBanner('Salle scellée', 'danger');
+    if (ev.type === 'roomCleared') showBanner('Salle purifiée', 'calm');
     if (ev.type === 'playerHurt') {
       hurtFlash.classList.add('on');
       clearTimeout(hurtTimeout);
@@ -239,6 +255,7 @@ function frame(timestamp) {
   // Changement d'étage : on reconstruit le décor et on n'interpole pas (téléportation)
   if (state.floorIndex !== viewFloor) {
     rebuildFloor();
+    gateView.reset();
     prev.x = state.player.x;
     prev.z = state.player.z;
     prevEnemies.clear();
@@ -262,6 +279,7 @@ function frame(timestamp) {
   enemyViews.update(state.enemies, enemyPos, time);
   projectileView.update(state.projectiles, 1 - alpha, STEP);
   effects.update(dt);
+  gateView.update(state, dt, time);
 
   const shake = effects.shakeOffset();
   cam.follow(x + shake.x, z + shake.z);
