@@ -10,6 +10,7 @@
   --texte: #e9e2cf; /* marbre */
   --accent: #f2c96b; /* or */
   --spectral: #2fff86; /* flammes vertes */
+  --ombre: #b9a0ff; /* Ombres : monnaie permanente */
   --voile: rgba(5, 8, 10, 0.8);
   --antique: 'Cinzel', Georgia, 'Times New Roman', serif;
 }
@@ -202,6 +203,16 @@ body {
   bottom: calc(36px + env(safe-area-inset-bottom));
   font-size: 15px;
   color: var(--accent);
+  text-shadow: 0 1px 2px #000;
+}
+
+/* Ombres gagnées pendant la partie (monnaie permanente) */
+#shadows {
+  position: absolute;
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(58px + env(safe-area-inset-bottom));
+  font-size: 15px;
+  color: var(--ombre);
   text-shadow: 0 1px 2px #000;
 }
 
@@ -625,6 +636,10 @@ body {
     bottom: auto;
     top: calc(74px + env(safe-area-inset-top));
   }
+  #shadows {
+    bottom: auto;
+    top: calc(96px + env(safe-area-inset-top));
+  }
   #boss-bar {
     top: calc(56px + env(safe-area-inset-top));
     width: 52vw;
@@ -636,4 +651,192 @@ body {
     transform: translateX(-50%);
     justify-content: center;
   }
+}
+
+/* Ombres rapportées, sur les écrans de fin */
+.earned {
+  color: var(--ombre);
+  font-weight: 700;
+}
+
+/* Boutons de l'écran titre (Seuil, abandon) */
+#start-screen .buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+#start-screen .buttons button {
+  font: 600 14px var(--antique);
+  padding: 10px 16px;
+  color: var(--ombre);
+  background: transparent;
+  border: 2px solid var(--ombre);
+  cursor: pointer;
+}
+
+#start-screen .buttons button[hidden] {
+  display: none;
+}
+
+/* ---------- Le Seuil : arbre des améliorations permanentes ---------- */
+#threshold {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+    calc(14px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  text-align: center;
+  background: radial-gradient(ellipse at top, rgba(40, 30, 70, 0.92), rgba(5, 8, 10, 0.98));
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+
+#threshold.hidden {
+  display: none;
+}
+
+#threshold header h2 {
+  margin: 0;
+  font-size: clamp(26px, 6vw, 40px);
+  letter-spacing: 4px;
+  color: var(--ombre);
+  text-shadow: 0 0 24px rgba(185, 160, 255, 0.4);
+}
+
+#threshold header p {
+  margin: 2px 0 0;
+}
+
+#threshold .shadows {
+  font-size: 20px;
+  color: var(--accent);
+}
+
+#threshold .gained {
+  color: var(--spectral);
+  min-height: 1.2em;
+}
+
+#threshold .tree {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 980px);
+}
+
+/* Écrans étroits (téléphone en portrait) : 2 branches par ligne */
+@media (max-width: 640px) {
+  #threshold .tree {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.branch {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.branch h3 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--accent);
+  letter-spacing: 2px;
+}
+
+.branch h3 small {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--texte);
+  opacity: 0.6;
+}
+
+.node {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 8px;
+  font: 12px/1.35 var(--antique);
+  color: var(--texte);
+  background: linear-gradient(#1b1830, #0b0a14);
+  border: 2px solid #4a3f7a;
+  cursor: pointer;
+  text-align: center;
+}
+
+.node b {
+  font-size: 13px;
+  color: var(--ombre);
+}
+
+.node i {
+  font-style: normal;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+
+.node small {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Achetable : bordure dorée */
+.node:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 14px rgba(242, 201, 107, 0.2);
+}
+
+.node:disabled {
+  cursor: default;
+}
+
+/* Trop cher : lisible mais éteint ; verrouillé : très éteint */
+.node:disabled small {
+  color: var(--texte);
+  opacity: 0.6;
+}
+
+.node.locked {
+  opacity: 0.4;
+}
+
+.node.full {
+  border-color: var(--spectral);
+}
+
+#threshold .stats {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+#threshold .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+#threshold .buttons button {
+  font: 600 15px var(--antique);
+  padding: 12px 18px;
+  color: var(--accent);
+  background: transparent;
+  border: 2px solid #8a6a2c;
+  cursor: pointer;
+}
+
+#threshold .buttons .btn-descend {
+  color: var(--fond);
+  background: var(--accent);
+}
+
+#threshold .buttons button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }

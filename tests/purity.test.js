@@ -11,7 +11,7 @@ import { join } from 'node:path';
 const ROOT = new URL('..', import.meta.url).pathname;
 
 // Dossiers qui doivent rester purs (certains n'existent pas encore : c'est prévu)
-export const PURE_DIRS = ['src/core/rng.js', 'src/core/fixedStep.js', 'src/state', 'src/systems', 'src/dungeon'];
+export const PURE_DIRS = ['src/core/rng.js', 'src/core/fixedStep.js', 'src/state', 'src/systems', 'src/dungeon', 'src/meta'];
 
 const FORBIDDEN = [
   { re: /Math\.random\s*\(/, why: 'hasard non reproductible : utiliser src/core/rng.js' },

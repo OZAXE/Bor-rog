@@ -93,7 +93,18 @@ export function createEffects(scene, haloTexture) {
           break;
         case 'hit':
           burst(ev.x, 0.6, ev.z, 8, 0xffffff, 3, 0.25);
-          shake = Math.max(shake, 0.06);
+          // Coup du destin : gerbe dorée et petit tremblement en plus
+          if (ev.crit) burst(ev.x, 0.8, ev.z, 14, 0xf2c96b, 3.5, 0.4);
+          shake = Math.max(shake, ev.crit ? 0.14 : 0.06);
+          break;
+        case 'defiance':
+          // Défi de la Mort : le héros se relève dans une explosion d'âme
+          burst(ev.x, 0.8, ev.z, 50, 0x2fff86, 5, 1.1);
+          burst(ev.x, 1.2, ev.z, 24, 0xf2c96b, 3, 0.9);
+          shake = Math.max(shake, 0.3);
+          break;
+        case 'reflect':
+          burst(ev.x, 0.75, ev.z, 10, 0x9fe8ff, 2, 0.3);
           break;
         case 'enemyDied':
           burst(ev.x, 0.6, ev.z, 26, ev.enemyType === 'shade' ? 0x8a5cff : ev.enemyType === 'fury' ? 0xd8333f : 0xe8e0c8, 3.5, 0.6);

@@ -16,6 +16,7 @@ export const SIM = {
     deceleration: 60, // m/s² : arrêt en ~0,09 s
     maxHp: 10,
     hurtInvuln: 0.8, // invulnérabilité après un coup reçu (s) : évite de mourir d'un enchaînement
+    defianceInvuln: 1.5, // Défi de la Mort : invulnérabilité en se relevant (s)
 
     attack: {
       range: 1.6, // portée de l'arc de coup, depuis le centre du héros (m)
@@ -179,6 +180,15 @@ SIM.loot = {
   rerollCost: 8, // puis +4 à chaque relance sur le même écran
   rerollCostStep: 4,
   boonChoices: 3,
+};
+
+// Ombres : monnaie PERMANENTE gagnée pendant la partie (même en mourant),
+// dépensée entre deux parties dans l'arbre des améliorations (src/meta/tree.js)
+SIM.shadows = {
+  enemy: 1, // ennemi ordinaire vaincu
+  elite: 3, // élite vaincue
+  floor: 5, // chaque nouvel étage atteint
+  bosses: { cerberus: 25, hydra: 40, thanatos: 60 },
 };
 
 // Les boss sont aussi des "ennemis" pour les collisions et la séparation

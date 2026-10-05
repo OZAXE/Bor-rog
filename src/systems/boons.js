@@ -4,6 +4,7 @@
 // possédés (l'état ne stocke que leur nombre, pas les valeurs dérivées).
 
 import { SIM } from './simConfig.js';
+import { metaValue, rankOf } from '../meta/tree.js';
 
 export const BOONS = {
   ares: {
@@ -54,15 +55,20 @@ export const BOONS = {
 
 export const BOON_IDS = Object.keys(BOONS);
 
-// Caractéristiques effectives du héros, bienfaits compris
+// Caractéristiques effectives du héros : bienfaits de la partie + améliorations
+// permanentes de l'arbre (p.meta, cf. src/meta/tree.js)
 export function playerStats(p) {
   const n = (id) => p.boons[id] || 0;
+  const m = (id) => metaValue(p.meta, id);
   const base = SIM.player;
   return {
-    damage: base.attack.damage + n('ares'),
-    speed: base.speed * (1 + 0.12 * n('hermes')),
+    damage: base.attack.damage + n('ares') + m('blade'),
+    speed: base.speed * (1 + 0.12 * n('hermes') + m('fleet')),
     attackRange: base.attack.range * (1 + 0.2 * n('artemis')),
-    attackCooldown: base.attack.cooldown * 0.85 ** n('zeus'),
+    attackCooldown: base.attack.cooldown * 0.85 ** n('zeus') * (1 - m('swift')),
+    critChance: m('crit'), // chance de dégâts doublés
+    dashCharges: 1 + rankOf(p.meta, 'doubleDash'),
+    reflect: rankOf(p.meta, 'reflect') > 0, // l'esquive renvoie les projectiles
     dashCooldown: base.dash.cooldown * 0.75 ** n('nyx'),
     hurtInvuln: base.hurtInvuln + 0.5 * n('athena'),
     // Tribut d'Hadès : 1 PV tous les "killsPerHeal" ennemis (0 = inactif)

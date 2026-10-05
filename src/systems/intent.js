@@ -14,7 +14,7 @@ export const EMPTY_INTENT = Object.freeze({
   aimY: 0,
   attack: false,
   dash: false,
-  choice: -1, // écran de Charon : bienfait choisi (0, 1 ou 2), -1 = aucun
+  choice: -1, // écran de Charon : bienfait choisi (0 à 3), -1 = aucun
   shop: '', // écran de Charon : 'heal' ou 'reroll' (achat), '' = rien
 });
 
@@ -37,7 +37,7 @@ export function sanitizeIntent(raw) {
     aimY: finite(i.aimY),
     attack: i.attack === true,
     dash: i.dash === true,
-    choice: Number.isInteger(i.choice) && i.choice >= 0 && i.choice < 3 ? i.choice : -1,
+    choice: Number.isInteger(i.choice) && i.choice >= 0 && i.choice < 4 ? i.choice : -1,
     shop: i.shop === 'heal' || i.shop === 'reroll' ? i.shop : '',
   };
 }
