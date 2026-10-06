@@ -133,6 +133,47 @@ body {
   opacity: 1;
 }
 
+/* Co-op : vie de l'allié (en haut à gauche) et compte à rebours quand on est à terre */
+#ally-hud {
+  position: absolute;
+  top: calc(36px + env(safe-area-inset-top));
+  left: calc(62px + env(safe-area-inset-left)); /* à droite du bouton pause */
+  padding: 3px 8px;
+  font-size: 14px;
+  color: var(--spectral);
+  border-left: 3px solid var(--spectral);
+  background: rgba(5, 8, 10, 0.55);
+  text-shadow: 0 1px 2px #000;
+}
+
+#ally-hud[hidden] {
+  display: none;
+}
+
+#ally-hud.danger {
+  color: #ff7a7a;
+  border-color: #ff7a7a;
+}
+
+#down-info {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: clamp(16px, 4vw, 22px);
+  letter-spacing: 1px;
+  color: #ff7a7a;
+  text-shadow: 0 1px 4px #000;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+#down-info.on {
+  opacity: 1;
+}
+
 #floor-banner.show {
   animation: banner 2.4s ease-out forwards;
 }

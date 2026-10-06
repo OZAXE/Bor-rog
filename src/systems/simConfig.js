@@ -9,6 +9,23 @@ export const SIM = {
   tickRate: 60, // pas de simulation par seconde
   stairsRadius: 0.45, // distance au centre de l'escalier pour descendre (m)
 
+  // Co-op (étape 8c) : 2 joueurs
+  coop: {
+    maxPlayers: 2,
+    // Calibrage au bot (75 % d'esquive, guerrier + chasseresse) : à deux, un peu plus
+    // facile qu'en solo (sans amélioration : mort vers l'étage 5 ; à mi-parcours ~8 %
+    // de victoires contre 0 % ; tout au max ~71 % contre 19 à 56 %)
+    enemyHp: 1.0, // +100 % de PV par joueur en plus (ennemis, têtes d'Hydre)
+    bossHp: 1.3, // +130 % pour les boss
+    enemyDamage: 1, // +1 dégât par joueur en plus (ennemis ordinaires) : partager les coups ne suffit pas
+    downTime: 15, // à terre : secondes pour être relevé avant de disparaître jusqu'à l'étage suivant
+    reviveTime: 2, // secondes à côté d'un allié à terre pour le relever
+    reviveRadius: 1.3, // distance pour relever (m)
+    reviveHp: 0.5, // part des PV max rendue en se relevant
+    returnHp: 0.5, // part des PV max au retour à l'étage suivant
+    reviveInvuln: 1.5, // invulnérabilité en se relevant (s)
+  },
+
   player: {
     radius: 0.35, // rayon de collision (m) : passe à l'aise dans un couloir de 2 cases
     speed: 5.5, // vitesse de marche (m/s)

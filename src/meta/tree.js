@@ -9,7 +9,7 @@
 // Cet arbre est commun à toutes les classes ; chaque classe aura plus tard le sien en plus.
 //
 // Ce fichier ne décrit que les règles (noms, prix, valeurs). Les effets sont appliqués
-// par la simulation à partir de state.player.meta = { attrs: { id: niveau }, talents: { id: rang } }.
+// par la simulation à partir de state.players[i].meta = { attrs: { id: niveau }, talents: { id: rang } }.
 
 export const ATTR_MAX = 10;
 // Prix (en Ombres) pour passer du niveau L au niveau L+1 : ATTR_COSTS[L - 1]

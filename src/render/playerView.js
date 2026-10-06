@@ -10,7 +10,8 @@ import * as THREE from 'three';
 
 const OUTLINE = 0.035; // épaisseur du contour (m)
 
-export function createPlayerView(scene, gradientMap) {
+// options.ring : couleur d'un anneau au sol (pour distinguer l'allié en co-op)
+export function createPlayerView(scene, gradientMap, options = {}) {
   const toon = (color) => new THREE.MeshToonMaterial({ color, gradientMap });
   const ink = new THREE.MeshBasicMaterial({ color: 0x05080a, side: THREE.BackSide });
 
@@ -119,15 +120,33 @@ export function createPlayerView(scene, gradientMap) {
   shadow.rotation.x = -Math.PI / 2;
   scene.add(shadow);
   scene.add(root);
+  // Anneau de l'allié (co-op)
+  let ring = null;
+  if (options.ring) {
+    ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.42, 0.5, 24),
+      new THREE.MeshBasicMaterial({ color: options.ring, transparent: true, opacity: 0.7, depthWrite: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    scene.add(ring);
+  }
 
   return {
     setClass,
     // x, z : position au sol ; facing : orientation ; speed : pour le petit rebond de marche
-    // fx : { blink, dashing } — clignote quand il vient d'être touché, s'étire en esquivant
+    // fx : { blink, dashing, down, hidden } — clignote quand il vient d'être touché,
+    // s'étire en esquivant, couché quand il est à terre (co-op), absent s'il est hors jeu
     update(x, z, facing, speed, time, fx = {}) {
-      root.position.set(x, 0, z);
-      root.rotation.y = facing;
-      root.visible = !fx.blink || Math.floor(time * 20) % 2 === 0;
+      root.position.set(x, fx.down ? 0.25 : 0, z);
+      root.rotation.set(fx.down ? -Math.PI / 2.2 : 0, facing, 0, 'YXZ');
+      root.visible = !fx.hidden && (!fx.blink || Math.floor(time * 20) % 2 === 0);
+      shadow.visible = !fx.hidden;
+      if (ring) {
+        ring.visible = !fx.hidden;
+        ring.position.set(x, 0.02, z);
+        // À terre : l'anneau pulse pour appeler à l'aide
+        ring.material.opacity = fx.down ? 0.45 + Math.abs(Math.sin(time * 6)) * 0.5 : 0.7;
+      }
       root.scale.set(fx.dashing ? 0.8 : 1, 1, fx.dashing ? 1.35 : 1);
       const bob = speed > 0.2 ? Math.abs(Math.sin(time * 12)) * 0.06 : 0;
       const m = models[current];

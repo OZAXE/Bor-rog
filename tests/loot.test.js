@@ -18,7 +18,7 @@ function arena() {
   s.dungeon = { width: W, height: W, tiles, rooms: [], decor: [], start: { c: 11, r: 11 }, stairs: { c: 1, r: 1 } };
   s.chests = [];
   s.pickups = [];
-  Object.assign(s.player, { x: 11.5, z: 11.5, vx: 0, vz: 0, facing: 0 });
+  Object.assign(s.players[0], { x: 11.5, z: 11.5, vx: 0, vz: 0, facing: 0 });
   return s;
 }
 const run = (s, n, intent = {}) => {
@@ -31,7 +31,7 @@ test('oboles : ramassées au contact et attirées de loin', () => {
   s.pickups.push({ id: 900, kind: 'obol', x: 11.5, z: 13.2, amount: 3 }); // 1,7 m : dans le rayon d'attraction
   s.pickups.push({ id: 901, kind: 'obol', x: 11.5, z: 18.5, amount: 5 }); // trop loin
   run(s, 60);
-  assert.equal(s.gold, 3);
+  assert.equal(s.players[0].gold, 3);
   assert.equal(s.pickups.length, 1, "l'obole lointaine ne doit pas bouger toute seule");
   assert.equal(s.pickups[0].z, 18.5);
 });
@@ -41,9 +41,9 @@ test('potion : soigne sans dépasser le maximum, et reste au sol si la vie est p
   s.pickups.push({ id: 900, kind: 'potion', x: 11.5, z: 11.6, amount: 1 });
   run(s, 2);
   assert.equal(s.pickups.length, 1, 'potion gaspillée alors que la vie est pleine');
-  s.player.hp = s.player.maxHp - 1;
+  s.players[0].hp = s.players[0].maxHp - 1;
   run(s, 2);
-  assert.equal(s.player.hp, s.player.maxHp, 'ne doit pas dépasser le maximum');
+  assert.equal(s.players[0].hp, s.players[0].maxHp, 'ne doit pas dépasser le maximum');
   assert.equal(s.pickups.length, 0);
 });
 
@@ -69,8 +69,8 @@ test('un ennemi vaincu lâche parfois du butin, de façon reproductible', () => 
 test('une salle purifiée laisse une récompense en son centre', () => {
   const s = createGameState('recompense');
   const room = s.dungeon.rooms.find((r) => r.type === 'combat' && s.enemies.some((e) => inRoom(r, e.x, e.z)));
-  s.player.x = room.x + Math.floor(room.w / 2) + 0.5;
-  s.player.z = room.y + Math.floor(room.h / 2) + 0.5;
+  s.players[0].x = room.x + Math.floor(room.w / 2) + 0.5;
+  s.players[0].z = room.y + Math.floor(room.h / 2) + 0.5;
   stepGame(s, {});
   assert.ok(s.lock);
   s.enemies = s.enemies.filter((e) => !s.lock.enemyIds.includes(e.id));
@@ -89,8 +89,8 @@ test('coffres : un par salle au trésor, ouvert une seule fois au contact', () =
     for (const c of s.chests) assert.equal(s.dungeon.tiles[Math.floor(c.z) * s.dungeon.width + Math.floor(c.x)], TILE.FLOOR);
     if (!s.chests.length) continue;
     const c = s.chests[0];
-    s.player.x = c.x;
-    s.player.z = c.z + 0.3;
+    s.players[0].x = c.x;
+    s.players[0].z = c.z + 0.3;
     stepGame(s, {});
     assert.ok(c.opened);
     const n = s.pickups.length;
@@ -104,8 +104,8 @@ test('coffres : un par salle au trésor, ouvert une seule fois au contact', () =
 // Place le héros sur l'escalier d'un étage sans ennemi
 function onStairs(seed = 'charon') {
   const s = createGameState(seed, { enemies: false });
-  s.player.x = s.dungeon.stairs.c + 0.5;
-  s.player.z = s.dungeon.stairs.r + 0.5;
+  s.players[0].x = s.dungeon.stairs.c + 0.5;
+  s.players[0].z = s.dungeon.stairs.r + 0.5;
   stepGame(s, {});
   return s;
 }
@@ -113,51 +113,51 @@ function onStairs(seed = 'charon') {
 test("l'escalier ouvre l'écran de Charon : 3 bienfaits différents, le donjon est en pause", () => {
   const s = onStairs();
   assert.equal(s.status, 'choosing');
-  assert.equal(s.offer.boons.length, 3);
-  assert.equal(new Set(s.offer.boons).size, 3);
+  assert.equal(s.players[0].offer.boons.length, 3);
+  assert.equal(new Set(s.players[0].offer.boons).size, 3);
   const tick = s.tick;
-  const x = s.player.x;
+  const x = s.players[0].x;
   run(s, 30, { moveX: 1 });
   assert.equal(s.tick, tick);
-  assert.equal(s.player.x, x);
+  assert.equal(s.players[0].x, x);
   assert.equal(s.floorIndex, 0);
 });
 
 test('choisir un bienfait l\'applique et fait descendre', () => {
   const s = onStairs();
-  const id = s.offer.boons[1];
+  const id = s.players[0].offer.boons[1];
   stepGame(s, { choice: 1 });
   assert.equal(s.status, 'playing');
   assert.equal(s.floorIndex, 1);
-  assert.equal(s.player.boons[id], 1);
-  assert.equal(s.offer, null);
+  assert.equal(s.players[0].boons[id], 1);
+  assert.equal(s.players[0].offer, null);
 });
 
 test('Charon : soin et relance payants, refusés sans assez d\'oboles', () => {
   const s = onStairs();
-  s.player.hp = 3;
-  s.gold = SIM.loot.healCost - 1;
+  s.players[0].hp = 3;
+  s.players[0].gold = SIM.loot.healCost - 1;
   stepGame(s, { shop: 'heal' });
-  assert.equal(s.player.hp, 3, 'soin accordé sans assez d\'oboles');
-  s.gold = SIM.loot.healCost + 100;
+  assert.equal(s.players[0].hp, 3, 'soin accordé sans assez d\'oboles');
+  s.players[0].gold = SIM.loot.healCost + 100;
   stepGame(s, { shop: 'heal' });
-  assert.equal(s.player.hp, 3 + SIM.loot.healAmount);
-  assert.equal(s.gold, 100);
-  const cost = rerollCost(s);
+  assert.equal(s.players[0].hp, 3 + SIM.loot.healAmount);
+  assert.equal(s.players[0].gold, 100);
+  const cost = rerollCost(s.players[0]);
   stepGame(s, { shop: 'reroll' });
-  assert.equal(s.gold, 100 - cost);
-  assert.ok(rerollCost(s) > cost, 'la relance doit coûter de plus en plus cher');
-  assert.equal(s.offer.boons.length, 3);
+  assert.equal(s.players[0].gold, 100 - cost);
+  assert.ok(rerollCost(s.players[0]) > cost, 'la relance doit coûter de plus en plus cher');
+  assert.equal(s.players[0].offer.boons.length, 3);
 });
 
 test('les bienfaits au maximum ne sont plus proposés', () => {
   const s = onStairs();
-  for (const id of BOON_IDS) s.player.boons[id] = BOONS[id].max;
-  s.player.boons.ares = BOONS.ares.max - 1;
+  for (const id of BOON_IDS) s.players[0].boons[id] = BOONS[id].max;
+  s.players[0].boons.ares = BOONS.ares.max - 1;
   s.status = 'playing';
-  s.player.x += 0.01;
+  s.players[0].x += 0.01;
   stepGame(s, {});
-  assert.deepEqual(s.offer.boons, ['ares']);
+  assert.deepEqual(s.players[0].offer.boons, ['ares']);
 });
 
 // ---------- Effet réel de chaque bienfait ----------
@@ -165,7 +165,7 @@ test('les bienfaits au maximum ne sont plus proposés', () => {
 test("Force d'Arès : une Ombre (3 PV) tombe en 2 coups au lieu de 3", () => {
   const hits = (ares) => {
     const s = arena();
-    s.player.boons.ares = ares;
+    s.players[0].boons.ares = ares;
     const e = createEnemy(s, { type: 'shade', x: 11.5, z: 12.5 });
     s.enemies.push(e);
     let n = 0;
@@ -184,20 +184,20 @@ test("Force d'Arès : une Ombre (3 PV) tombe en 2 coups au lieu de 3", () => {
 
 test("Vigueur de Déméter : +3 PV max et soigne 3", () => {
   const s = onStairs();
-  s.player.hp = 5;
-  s.offer.boons = ['demeter', 'ares', 'zeus'];
+  s.players[0].hp = 5;
+  s.players[0].offer.boons = ['demeter', 'ares', 'zeus'];
   stepGame(s, { choice: 0 });
-  assert.equal(s.player.maxHp, SIM.player.maxHp + 3);
-  assert.equal(s.player.hp, 8);
+  assert.equal(s.players[0].maxHp, SIM.player.maxHp + 3);
+  assert.equal(s.players[0].hp, 8);
 });
 
 test("Célérité d'Hermès : on va plus loin dans le même temps", () => {
   const dist = (hermes) => {
     const s = arena();
-    s.player.x = 2.5;
-    s.player.boons.hermes = hermes;
+    s.players[0].x = 2.5;
+    s.players[0].boons.hermes = hermes;
     run(s, 60, { moveX: 1 });
-    return s.player.x - 2.5;
+    return s.players[0].x - 2.5;
   };
   assert.ok(dist(1) > dist(0) * 1.1, `${dist(0)} -> ${dist(1)}`);
 });
@@ -205,7 +205,7 @@ test("Célérité d'Hermès : on va plus loin dans le même temps", () => {
 test("Allonge d'Artémis : touche un ennemi hors de la portée normale", () => {
   const touch = (artemis) => {
     const s = arena();
-    s.player.boons.artemis = artemis;
+    s.players[0].boons.artemis = artemis;
     const e = createEnemy(s, { type: 'shade', x: 11.5, z: 11.5 + SIM.player.attack.range + 0.55 });
     s.enemies.push(e);
     stepGame(s, { ...SOUTH, attack: true });
@@ -218,7 +218,7 @@ test("Allonge d'Artémis : touche un ennemi hors de la portée normale", () => {
 test('Fureur de Zeus et Voile de Nyx : recharges plus courtes', () => {
   const swings = (zeus) => {
     const s = arena();
-    s.player.boons.zeus = zeus;
+    s.players[0].boons.zeus = zeus;
     let n = 0;
     for (let i = 0; i < 120; i++) {
       stepGame(s, { ...SOUTH, attack: true });
@@ -228,27 +228,27 @@ test('Fureur de Zeus et Voile de Nyx : recharges plus courtes', () => {
   };
   assert.ok(swings(2) > swings(0), 'Zeus sans effet');
   const s = arena();
-  s.player.boons.nyx = 1;
-  s.player.x = 3.5;
+  s.players[0].boons.nyx = 1;
+  s.players[0].x = 3.5;
   stepGame(s, { moveX: 1, dash: true });
-  assert.ok(s.player.dashCooldown < ticks(SIM.player.dash.cooldown), 'Nyx sans effet');
+  assert.ok(s.players[0].dashCooldown < ticks(SIM.player.dash.cooldown), 'Nyx sans effet');
 });
 
 test("Égide d'Athéna : invulnérabilité plus longue après un coup", () => {
   const s = arena();
-  s.player.boons.athena = 1;
+  s.players[0].boons.athena = 1;
   const e = createEnemy(s, { type: 'shade', x: 11.5, z: 12.4 });
   Object.assign(e, { alert: true, mode: 'windup', timer: 1, aimX: 0, aimZ: -1, facing: Math.PI });
   s.enemies.push(e);
   stepGame(s, {});
-  assert.ok(s.player.invuln >= ticks(SIM.player.hurtInvuln + 0.5) - 1, `invuln ${s.player.invuln}`);
+  assert.ok(s.players[0].invuln >= ticks(SIM.player.hurtInvuln + 0.5) - 1, `invuln ${s.players[0].invuln}`);
 });
 
 test("Tribut d'Hadès : la vie remonte en vainquant des ennemis", () => {
   const s = arena();
-  s.player.boons.hades = 1;
-  s.player.hp = 5;
-  const per = playerStats(s.player).killsPerHeal;
+  s.players[0].boons.hades = 1;
+  s.players[0].hp = 5;
+  const per = playerStats(s.players[0]).killsPerHeal;
   for (let k = 0; k < per; k++) {
     const e = createEnemy(s, { type: 'archer', x: 11.5, z: 12.5 });
     e.hp = 1;
@@ -256,7 +256,7 @@ test("Tribut d'Hadès : la vie remonte en vainquant des ennemis", () => {
     stepGame(s, { ...SOUTH, attack: true });
     run(s, ticks(SIM.player.attack.cooldown), SOUTH);
   }
-  assert.equal(s.player.hp, 6);
+  assert.equal(s.players[0].hp, 6);
 });
 
 test('partie complète avec butin et choix : rejeu identique', () => {

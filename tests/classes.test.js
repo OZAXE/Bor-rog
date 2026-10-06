@@ -20,7 +20,7 @@ function arena(cls, meta = {}) {
   s.dungeon = { width: W, height: W, tiles, rooms: [], decor: [], start: { c: 15, r: 5 }, stairs: { c: 1, r: 1 } };
   s.chests = [];
   s.pickups = [];
-  Object.assign(s.player, { x: 15.5, z: 5.5, vx: 0, vz: 0, facing: 0 });
+  Object.assign(s.players[0], { x: 15.5, z: 5.5, vx: 0, vz: 0, facing: 0 });
   return s;
 }
 // Ennemi immobile et inoffensif (en récupération), pour mesurer les dégâts
@@ -45,12 +45,12 @@ test('trois classes ; le Guerrier est le héros de base ; une classe inconnue do
   assert.equal(classOf('triche'), 'warrior');
   for (const id of CLASS_IDS) {
     const s = createGameState('pv', { cls: id });
-    assert.equal(s.player.cls, id);
-    assert.equal(s.player.maxHp, SIM.classes[id].maxHp);
+    assert.equal(s.players[0].cls, id);
+    assert.equal(s.players[0].maxHp, SIM.classes[id].maxHp);
   }
-  assert.equal(createGameState('pv').player.cls, 'warrior');
-  assert.equal(createGameState('pv', { cls: 'triche' }).player.cls, 'warrior');
-  const w = playerStats(createGameState('pv').player);
+  assert.equal(createGameState('pv').players[0].cls, 'warrior');
+  assert.equal(createGameState('pv', { cls: 'triche' }).players[0].cls, 'warrior');
+  const w = playerStats(createGameState('pv').players[0]);
   assert.equal(w.weapon, 'sword');
   assert.equal(w.attackRange, SIM.player.attack.range);
   assert.equal(w.attackCooldown, SIM.player.attack.cooldown);
@@ -65,7 +65,7 @@ test('Chasseresse : la flèche part dans la direction visée, touche un ennemi l
   assert.ok(s.events.some((ev) => ev.type === 'heroShot' && ev.kind === 'heroArrow'));
   run(s, 60);
   assert.equal(e.hp, 50 - SIM.classes.huntress.attack.damage);
-  assert.equal(s.player.hp, s.player.maxHp);
+  assert.equal(s.players[0].hp, s.players[0].maxHp);
   assert.equal(s.projectiles.length, 0);
 });
 
@@ -130,10 +130,10 @@ test("Mystique : l'orbe explose aussi en bout de course et contre un mur", () =>
 test('visée automatique (mobile) : la Chasseresse vise loin, le Guerrier seulement près', () => {
   const aimedAt = (cls) => {
     const s = arena(cls);
-    s.player.facing = Math.PI; // regarde au nord
+    s.players[0].facing = Math.PI; // regarde au nord
     dummy(s, 15.5, 12.5); // 7 m au sud
     stepGame(s, { attack: true });
-    return Math.abs(s.player.facing) < 0.01;
+    return Math.abs(s.players[0].facing) < 0.01;
   };
   assert.equal(aimedAt('huntress'), true);
   assert.equal(aimedAt('warrior'), false);
@@ -258,7 +258,7 @@ test('Tourbillon : frappe tout autour (devant et derrière), double dégâts, re
   const kb = Math.hypot(side.kvx, side.kvz);
   assert.ok(kb > SP('warrior').knockback - 1 && kb <= SP('warrior').knockback, `recul du Tourbillon sur le côté : ${kb}`);
   assert.ok(side.kvx > 0);
-  assert.ok(s.player.invuln > 0, 'invulnérable pendant la rotation');
+  assert.ok(s.players[0].invuln > 0, 'invulnérable pendant la rotation');
   assert.ok(s.events.some((ev) => ev.type === 'special' && ev.id === 'whirl'));
 });
 

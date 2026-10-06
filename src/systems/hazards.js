@@ -3,7 +3,7 @@
 // l'effet. Une zone "once" frappe une seule fois à la fin de l'annonce ; les autres
 // brûlent tant qu'elles durent (au plus un dégât par passage d'invulnérabilité).
 
-import { hurtPlayer } from './player.js';
+import { hurtPlayersWhere } from './player.js';
 import { SIM } from './simConfig.js';
 
 // warn, life, every : en pas de simulation
@@ -14,22 +14,21 @@ export function addHazard(state, { x, z, r, warn, life = 0, damage, every = 30, 
 }
 
 export function updateHazards(state) {
-  const p = state.player;
   state.hazards = state.hazards.filter((h) => {
-    const inside = Math.hypot(p.x - h.x, p.z - h.z) < h.r + SIM.player.radius * 0.5;
+    const inside = (p) => Math.hypot(p.x - h.x, p.z - h.z) < h.r + SIM.player.radius * 0.5;
     if (h.warn > 0) {
       h.warn--;
       if (h.warn > 0) return true;
       state.events.push({ type: 'hazardStart', kind: h.kind, x: h.x, z: h.z, r: h.r });
       if (h.once) {
-        if (inside) hurtPlayer(state, h.damage, h.x, h.z);
+        hurtPlayersWhere(state, inside, h.damage, h.x, h.z);
         return false;
       }
     }
     if (h.life-- <= 0) return false;
     if (h.timer > 0) h.timer--;
-    else if (inside) {
-      hurtPlayer(state, h.damage, h.x, h.z);
+    else if (state.players.some(inside)) {
+      hurtPlayersWhere(state, inside, h.damage, h.x, h.z);
       h.timer = h.every;
     }
     return true;

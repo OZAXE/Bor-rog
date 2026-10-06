@@ -40,8 +40,8 @@ function arenaFight(seed = 'cerbere') {
   enterFloor(s, 2);
   const arena = s.dungeon.rooms.find((r) => r.type === 'boss');
   const c = center(arena);
-  s.player.x = c.c + 0.5;
-  s.player.z = c.r + 3.5;
+  s.players[0].x = c.c + 0.5;
+  s.players[0].z = c.r + 3.5;
   stepGame(s, {});
   const boss = s.enemies.find((e) => e.boss);
   return { s, boss, arena };
@@ -56,21 +56,21 @@ test("l'étage 3 contient Cerbère seul ; entrer dans l'arène la scelle (escali
   assert.equal(s.enemies.length, 1);
   assert.ok(s.lock && s.lock.roomId === arena.id, "l'arène aurait dû se sceller");
   assert.ok(s.lock.enemyIds.includes(boss.id));
-  assert.equal(walkDistances(s.dungeon, { c: Math.floor(s.player.x), r: Math.floor(s.player.z) })[s.dungeon.stairs.r * s.dungeon.width + s.dungeon.stairs.c], -1, "l'escalier ne doit pas être accessible pendant le combat");
+  assert.equal(walkDistances(s.dungeon, { c: Math.floor(s.players[0].x), r: Math.floor(s.players[0].z) })[s.dungeon.stairs.r * s.dungeon.width + s.dungeon.stairs.c], -1, "l'escalier ne doit pas être accessible pendant le combat");
 });
 
 test('Cerbère se présente avant sa première attaque', () => {
   const { s, boss } = arenaFight();
   run(s, 60);
   assert.notEqual(boss.mode, 'windup', 'attaque trop tôt');
-  assert.equal(s.player.hp, SIM.player.maxHp);
+  assert.equal(s.players[0].hp, SIM.player.maxHp);
 });
 
 // Avance jusqu'à ce que Cerbère annonce l'attaque voulue (en gardant le héros invulnérable)
 function waitFor(s, boss, attack, maxTicks = 60 * 30, intent = {}) {
   for (let i = 0; i < maxTicks; i++) {
     if (boss.mode === 'windup' && boss.attack === attack) return true;
-    s.player.invuln = 5;
+    s.players[0].invuln = 5;
     stepGame(s, intent);
   }
   return false;
@@ -80,7 +80,7 @@ test('Cerbère varie ses attaques (pas seulement la morsure)', () => {
   const { s, boss } = arenaFight('varie');
   const kinds = new Set();
   for (let i = 0; i < 60 * 40; i++) {
-    s.player.invuln = 5;
+    s.players[0].invuln = 5;
     stepGame(s, {});
     for (const e of s.events) if (e.type === 'windup') kinds.add(e.attack);
   }
@@ -90,21 +90,21 @@ test('Cerbère varie ses attaques (pas seulement la morsure)', () => {
 test("charge : annoncée, elle touche le héros resté dans la ligne", () => {
   const { s, boss } = arenaFight();
   assert.ok(waitFor(s, boss, 'charge'), 'pas de charge');
-  s.player.invuln = 0;
+  s.players[0].invuln = 0;
   // Le héros se replace dans l'axe de la charge, à 3 m devant le boss
-  s.player.x = boss.x + boss.aimX * 3;
-  s.player.z = boss.z + boss.aimZ * 3;
-  const hp = s.player.hp;
+  s.players[0].x = boss.x + boss.aimX * 3;
+  s.players[0].z = boss.z + boss.aimZ * 3;
+  const hp = s.players[0].hp;
   run(s, boss.timer - 1);
-  assert.equal(s.player.hp, hp, 'touché pendant l\'annonce');
+  assert.equal(s.players[0].hp, hp, 'touché pendant l\'annonce');
   run(s, 40);
-  assert.equal(s.player.hp, hp - B.charge.damage);
+  assert.equal(s.players[0].hp, hp - B.charge.damage);
 });
 
 test('charge contre un mur ou une colonne : Cerbère est sonné longtemps', () => {
   const { s, boss } = arenaFight();
   assert.ok(waitFor(s, boss, 'charge'));
-  s.player.invuln = 99999;
+  s.players[0].invuln = 99999;
   let crashed = false;
   for (let i = 0; i < 120 && !crashed; i++) {
     stepGame(s, {});
@@ -122,16 +122,16 @@ test('triple souffle : touché dans un cône, épargné entre deux cônes', () =
     assert.ok(waitFor(s, boss, 'breath'), 'pas de souffle');
     // On place le héros à 3,5 m, avec un écart d'angle donné par rapport à l'axe du souffle
     const a = boss.facing + offset;
-    s.player.x = boss.x + Math.sin(a) * 3.5;
-    s.player.z = boss.z + Math.cos(a) * 3.5;
-    s.player.invuln = 0;
-    const hp = s.player.hp;
+    s.players[0].x = boss.x + Math.sin(a) * 3.5;
+    s.players[0].z = boss.z + Math.cos(a) * 3.5;
+    s.players[0].invuln = 0;
+    const hp = s.players[0].hp;
     run(s, boss.timer + 1, () => {
-      s.player.x = boss.x + Math.sin(a) * 3.5; // le héros reste immobile à cet endroit
-      s.player.z = boss.z + Math.cos(a) * 3.5;
+      s.players[0].x = boss.x + Math.sin(a) * 3.5; // le héros reste immobile à cet endroit
+      s.players[0].z = boss.z + Math.cos(a) * 3.5;
       return {};
     });
-    return hp - s.player.hp;
+    return hp - s.players[0].hp;
   };
   assert.equal(place(0), B.breath.damage, 'cône central');
   assert.equal(place(0.8), B.breath.damage, 'cône latéral');
@@ -140,14 +140,14 @@ test('triple souffle : touché dans un cône, épargné entre deux cônes', () =
 
 test('phase 2 à 50 % : hurlement (invulnérable), 3 Ombres une seule fois, charges doublées', () => {
   const { s, boss } = arenaFight('phase2');
-  s.player.invuln = 99999;
+  s.players[0].invuln = 99999;
   boss.hp = Math.floor(boss.maxHp * B.phase2.at);
   let summons = 0;
   let deflected = false;
   for (let i = 0; i < 60 * 25; i++) {
-    s.player.invuln = 99999;
+    s.players[0].invuln = 99999;
     const it = boss.mode === 'windup' && boss.attack === 'howl'
-      ? { attack: true, aimX: (boss.x - s.player.x), aimY: -(boss.z - s.player.z) }
+      ? { attack: true, aimX: (boss.x - s.players[0].x), aimY: -(boss.z - s.players[0].z) }
       : {};
     stepGame(s, it);
     summons += s.events.filter((e) => e.type === 'summon').length;
@@ -158,7 +158,7 @@ test('phase 2 à 50 % : hurlement (invulnérable), 3 Ombres une seule fois, char
   // Une charge de phase 2 enchaîne une seconde charge
   let chains = 0;
   for (let i = 0; i < 60 * 30; i++) {
-    s.player.invuln = 99999;
+    s.players[0].invuln = 99999;
     const before = boss.chainLeft;
     stepGame(s, {});
     if (before === 1 && boss.chainLeft === 0 && boss.mode === 'windup') chains++;
@@ -169,10 +169,10 @@ test('phase 2 à 50 % : hurlement (invulnérable), 3 Ombres une seule fois, char
 test('le hurlement rend Cerbère invulnérable', () => {
   const { s, boss } = arenaFight('hurlement');
   boss.hp = Math.floor(boss.maxHp * B.phase2.at);
-  s.player.invuln = 99999;
+  s.players[0].invuln = 99999;
   assert.ok(waitFor(s, boss, 'howl', 60 * 10));
-  s.player.x = boss.x;
-  s.player.z = boss.z + B.radius + 0.6;
+  s.players[0].x = boss.x;
+  s.players[0].z = boss.z + B.radius + 0.6;
   const hp = boss.hp;
   stepGame(s, { attack: true, aimX: 0, aimY: 1 });
   assert.equal(boss.hp, hp);
@@ -181,8 +181,8 @@ test('le hurlement rend Cerbère invulnérable', () => {
 test('Cerbère ne recule pas sous les coups et ne se laisse pas interrompre', () => {
   const { s, boss } = arenaFight('lourd');
   assert.ok(waitFor(s, boss, 'breath'));
-  s.player.x = boss.x;
-  s.player.z = boss.z + B.radius + 0.5;
+  s.players[0].x = boss.x;
+  s.players[0].z = boss.z + B.radius + 0.5;
   const mode = boss.mode;
   // Héros au sud du boss : il vise le nord (aimY > 0) pour le frapper
   stepGame(s, { attack: true, aimX: 0, aimY: 1 });
@@ -195,22 +195,22 @@ test('Cerbère ne recule pas sous les coups et ne se laisse pas interrompre', ()
 test('victoire : serviteurs dissipés, grilles ouvertes, trésor, escalier accessible', () => {
   const { s, boss } = arenaFight('victoire');
   boss.hp = Math.floor(boss.maxHp * B.phase2.at);
-  s.player.invuln = 99999;
+  s.players[0].invuln = 99999;
   run(s, 60 * 6, () => {
-    s.player.invuln = 99999;
+    s.players[0].invuln = 99999;
     return {};
   });
   assert.ok(s.enemies.filter((e) => !e.boss).length > 0, 'les Ombres auraient dû être appelées');
   boss.hp = 1;
-  s.player.x = boss.x;
-  s.player.z = boss.z + B.radius + 0.6;
+  s.players[0].x = boss.x;
+  s.players[0].z = boss.z + B.radius + 0.6;
   stepGame(s, { attack: true, aimX: 0, aimY: 1 });
   assert.ok(s.events.some((e) => e.type === 'bossDefeated'), 'boss non vaincu');
   assert.equal(s.enemies.length, 0, 'les serviteurs auraient dû disparaître');
   stepGame(s, {});
   assert.equal(s.lock, null);
   assert.ok(s.pickups.filter((p) => p.kind === 'obol').reduce((a, p) => a + p.amount, 0) >= B.reward.obols[0]);
-  const dist = walkDistances(s.dungeon, { c: Math.floor(s.player.x), r: Math.floor(s.player.z) });
+  const dist = walkDistances(s.dungeon, { c: Math.floor(s.players[0].x), r: Math.floor(s.players[0].z) });
   assert.ok(dist[s.dungeon.stairs.r * s.dungeon.width + s.dungeon.stairs.c] > 0, 'escalier toujours inaccessible');
 });
 
@@ -220,7 +220,7 @@ test('combat contre Cerbère : jamais dans un mur, rejeu identique', () => {
     for (let i = 0; i < 60 * 40 && s.status === 'playing'; i++) {
       stepGame(s, { moveX: Math.cos(i / 31), moveY: Math.sin(i / 43), attack: i % 3 === 0, dash: i % 50 === 0 });
       for (const e of s.enemies) assert.ok(!overlapsSolid(s.dungeon, e, SIM.enemies[e.type].radius), `${e.type} dans un mur`);
-      assert.ok(!overlapsSolid(s.dungeon, s.player, SIM.player.radius), 'héros dans un mur');
+      assert.ok(!overlapsSolid(s.dungeon, s.players[0], SIM.player.radius), 'héros dans un mur');
     }
     return s;
   };

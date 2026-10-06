@@ -9,85 +9,95 @@ import { enterFloor } from '../state/gameState.js';
 import { metaValue, rankOf } from '../meta/tree.js';
 
 // Pacte de Charon (talent) : au tout début de la partie, choix d'un bienfait sans descendre
+// (seuls les héros qui ont le talent choisissent ; les autres attendent)
 export function startPact(state) {
   state.status = 'choosing';
-  state.offer = { boons: drawBoons(state), rerolls: 0, free: rankOf(state.player.meta, 'freeReroll'), start: true };
+  for (const p of state.players) {
+    if (rankOf(p.meta, 'pact')) p.offer = { boons: drawBoons(state, p), rerolls: 0, free: rankOf(p.meta, 'freeReroll'), start: true };
+  }
   state.events.push({ type: 'descentOffer', start: true });
 }
 
 // Prix chez Charon, Marchandage compris
-export function healCost(state) {
-  return Math.round(SIM.loot.healCost * (1 - metaValue(state.player.meta, 'haggle')));
+export function healCost(p) {
+  return Math.round(SIM.loot.healCost * (1 - metaValue(p.meta, 'haggle')));
 }
 
+// Escalier : chaque héros (même tombé) reçoit son offre ; on descend quand tous ont choisi
 export function startDescent(state) {
   state.status = 'choosing';
   // free : relances gratuites restantes (Ami du passeur, arbre permanent)
-  state.offer = { boons: drawBoons(state), rerolls: 0, free: rankOf(state.player.meta, 'freeReroll') };
+  for (const p of state.players) p.offer = { boons: drawBoons(state, p), rerolls: 0, free: rankOf(p.meta, 'freeReroll') };
   state.events.push({ type: 'descentOffer' });
 }
 
-function drawBoons(state) {
-  const pool = shuffle(state.rng, availableBoons(state.player));
+function drawBoons(state, p) {
+  const pool = shuffle(state.rng, availableBoons(p));
   // Faveur des dieux (arbre permanent) : un bienfait de plus proposé
-  return pool.slice(0, SIM.loot.boonChoices + rankOf(state.player.meta, 'choice4'));
+  return pool.slice(0, SIM.loot.boonChoices + rankOf(p.meta, 'choice4'));
 }
 
-export function rerollCost(state) {
-  if (state.offer.free > 0) return 0;
-  const base = SIM.loot.rerollCost + SIM.loot.rerollCostStep * state.offer.rerolls;
-  return Math.round(base * (1 - metaValue(state.player.meta, 'haggle')));
+export function rerollCost(p) {
+  if (p.offer.free > 0) return 0;
+  const base = SIM.loot.rerollCost + SIM.loot.rerollCostStep * p.offer.rerolls;
+  return Math.round(base * (1 - metaValue(p.meta, 'haggle')));
 }
 
-// Traite l'intention pendant l'écran de choix (rien d'autre ne bouge)
-export function updateDescent(state, intent) {
+// Traite les intentions pendant l'écran de choix (rien d'autre ne bouge).
+// intents[i] : intention du joueur i
+export function updateDescent(state, intents) {
+  let start = false;
+  state.players.forEach((p, i) => {
+    if (!p.offer) return; // déjà choisi : attend l'autre joueur
+    start = start || !!p.offer.start;
+    choose(state, p, intents[i]);
+  });
+  if (state.players.some((p) => p.offer)) return;
+  // Tous ont choisi
+  if (start) state.status = 'playing'; // Pacte de Charon : la partie commence sur place
+  else descend(state);
+}
+
+function choose(state, p, intent) {
   const l = SIM.loot;
-  const p = state.player;
-  if (intent.shop === 'heal' && state.gold >= healCost(state) && p.hp < p.maxHp) {
-    state.gold -= healCost(state);
+  const offer = p.offer;
+  if (intent.shop === 'heal' && p.gold >= healCost(p) && p.hp < p.maxHp) {
+    p.gold -= healCost(p);
     p.hp = Math.min(p.maxHp, p.hp + l.healAmount);
-    state.events.push({ type: 'bought', item: 'heal' });
-  } else if (intent.shop === 'reroll' && state.gold >= rerollCost(state)) {
-    if (state.offer.free > 0) state.offer.free--;
+    state.events.push({ type: 'bought', item: 'heal', player: p.id });
+  } else if (intent.shop === 'reroll' && p.gold >= rerollCost(p)) {
+    if (offer.free > 0) offer.free--;
     else {
-      state.gold -= rerollCost(state);
-      state.offer.rerolls++;
+      p.gold -= rerollCost(p);
+      offer.rerolls++;
     }
-    state.offer.boons = drawBoons(state);
-    state.events.push({ type: 'bought', item: 'reroll' });
+    offer.boons = drawBoons(state, p);
+    state.events.push({ type: 'bought', item: 'reroll', player: p.id });
   }
 
-  const id = state.offer.boons[intent.choice];
-  if (intent.choice >= 0 && state.offer.start) {
-    // Pacte de Charon : le bienfait choisi, la partie commence sur place
-    if (id) {
-      takeBoon(p, id);
-      state.events.push({ type: 'boon', id });
-    }
-    state.offer = null;
-    state.status = 'playing';
-  } else if (intent.choice >= 0 && id) {
+  const id = offer.boons[intent.choice];
+  if (intent.choice >= 0 && id) {
     takeBoon(p, id);
-    state.events.push({ type: 'boon', id });
-    descend(state);
-  } else if (intent.choice >= 0 && state.offer.boons.length === 0) {
-    // Tous les bienfaits sont au maximum : on descend sans rien prendre
-    descend(state);
+    state.events.push({ type: 'boon', id, player: p.id });
+    p.offer = null;
+  } else if (intent.choice >= 0 && (offer.start || offer.boons.length === 0)) {
+    // Pacte sans bienfait disponible, ou tous les bienfaits au maximum : on passe
+    p.offer = null;
   }
 }
 
 // Passage à l'étage suivant
 function descend(state) {
-  const p = state.player;
-  state.offer = null;
   state.status = 'playing';
   enterFloor(state, state.floorIndex + 1);
   state.shadows += SIM.shadows.floor;
   state.events.push({ type: 'floor', floor: state.floorIndex });
   // Racines nourricières (arbre permanent) : soin à l'arrivée sur l'étage
-  const heal = Math.min(metaValue(p.meta, 'roots'), p.maxHp - p.hp);
-  if (heal > 0) {
-    p.hp += heal;
-    state.events.push({ type: 'heal', amount: heal, x: p.x, z: p.z });
+  for (const p of state.players) {
+    const heal = Math.min(metaValue(p.meta, 'roots'), p.maxHp - p.hp);
+    if (heal > 0) {
+      p.hp += heal;
+      state.events.push({ type: 'heal', amount: heal, x: p.x, z: p.z, player: p.id });
+    }
   }
 }

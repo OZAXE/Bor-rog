@@ -68,8 +68,8 @@ function arena(meta = {}) {
   s.chests = [];
   s.pickups = [];
   s.status = 'playing';
-  s.offer = null;
-  Object.assign(s.player, { x: 11.5, z: 11.5, vx: 0, vz: 0, facing: 0 });
+  s.players[0].offer = null;
+  Object.assign(s.players[0], { x: 11.5, z: 11.5, vx: 0, vz: 0, facing: 0 });
   return s;
 }
 function addEnemy(s, type, x, z, extra = {}) {
@@ -85,9 +85,9 @@ const SOUTH = { aimX: 0, aimY: -1 };
 function onStairs(meta = {}) {
   const s = createGameState('charon-meta', { enemies: false, meta });
   s.status = 'playing';
-  s.offer = null;
-  s.player.x = s.dungeon.stairs.c + 0.5;
-  s.player.z = s.dungeon.stairs.r + 0.5;
+  s.players[0].offer = null;
+  s.players[0].x = s.dungeon.stairs.c + 0.5;
+  s.players[0].z = s.dungeon.stairs.r + 0.5;
   stepGame(s, {});
   return s;
 }
@@ -289,10 +289,10 @@ test('même graine + mêmes améliorations = même partie (critiques, Danse des 
 test('attributs : cadence (Arès), PV (Déméter), vitesse (Hermès)', () => {
   const low = createGameState('attr', { meta: {} });
   const high = createGameState('attr', { meta: { attrs: { ares: 10, demeter: 10, hermes: 10 } } });
-  const sl = playerStats(low.player);
-  const sh = playerStats(high.player);
+  const sl = playerStats(low.players[0]);
+  const sh = playerStats(high.players[0]);
   assert.ok(Math.abs(sh.attackCooldown / sl.attackCooldown - 0.82) < 1e-9);
-  assert.equal(high.player.maxHp, low.player.maxHp + 3);
+  assert.equal(high.players[0].maxHp, low.players[0].maxHp + 3);
   assert.ok(Math.abs(sh.speed / sl.speed - 1.135) < 1e-9);
 });
 
@@ -372,28 +372,28 @@ test('Exécution : dégâts doublés sur un ennemi presque vaincu', () => {
 
 test("Rage d'Arès : coups plus rapides pendant 3 s après avoir vaincu un ennemi", () => {
   const s = arena(build({ rage: 1 }));
-  const normal = playerStats(s.player).attackCooldown;
+  const normal = playerStats(s.players[0]).attackCooldown;
   addEnemy(s, 'shade', 11.5, 12.6, { hp: 1 });
   stepGame(s, { ...SOUTH, attack: true });
-  assert.ok(Math.abs(playerStats(s.player).attackCooldown - normal * (1 - TALENTS.rage.per)) < 1e-9);
+  assert.ok(Math.abs(playerStats(s.players[0]).attackCooldown - normal * (1 - TALENTS.rage.per)) < 1e-9);
   run(s, ticks(3) + 1);
-  assert.equal(playerStats(s.player).attackCooldown, normal);
+  assert.equal(playerStats(s.players[0]).attackCooldown, normal);
 });
 
 // ---------- Déméter ----------
 
 test("Sève d'Asphodèle et Bourse du passeur : PV et oboles de départ", () => {
   const s = createGameState('depart', { meta: build({ vigor: 2, purse: 2 }, { demeter: 4 }) });
-  assert.equal(s.player.maxHp, SIM.player.maxHp + 2 * TALENTS.vigor.per + 1);
-  assert.equal(s.player.hp, s.player.maxHp);
-  assert.equal(s.gold, 30);
+  assert.equal(s.players[0].maxHp, SIM.player.maxHp + 2 * TALENTS.vigor.per + 1);
+  assert.equal(s.players[0].hp, s.players[0].maxHp);
+  assert.equal(s.players[0].gold, 30);
 });
 
 test('Écorce : invulnérabilité plus longue après un coup reçu', () => {
   const inv = (meta) => {
     const s = arena(meta);
-    hurtPlayer(s, 1, 0, 0);
-    return s.player.invuln;
+    hurtPlayer(s, s.players[0], 1, 0, 0);
+    return s.players[0].invuln;
   };
   assert.equal(inv(build({ bark: 2 })), inv(bare()) + ticks(2 * TALENTS.bark.per));
 });
@@ -401,10 +401,10 @@ test('Écorce : invulnérabilité plus longue après un coup reçu', () => {
 test('Élixir : potions plus efficaces', () => {
   const heal = (meta) => {
     const s = arena(meta);
-    s.player.hp = 1;
+    s.players[0].hp = 1;
     s.pickups.push({ id: 999, kind: 'potion', x: 11.5, z: 11.5, amount: 1 });
     stepGame(s, {});
-    return s.player.hp - 1;
+    return s.players[0].hp - 1;
   };
   assert.equal(heal(bare()), SIM.loot.potionHeal);
   const r = TALENTS.elixir.ranks;
@@ -415,10 +415,10 @@ test('Élixir : potions plus efficaces', () => {
 test('Moisson : chaque boss vaincu donne des PV maximum', () => {
   const after = (meta) => {
     const s = arena(meta);
-    s.player.hp = 5;
+    s.players[0].hp = 5;
     addEnemy(s, 'cerberus', 11.5, 12.9, { hp: 1, alert: true, boss: true });
     stepGame(s, { ...SOUTH, attack: true });
-    return [s.player.maxHp - arena(meta).player.maxHp, s.player.hp];
+    return [s.players[0].maxHp - arena(meta).players[0].maxHp, s.players[0].hp];
   };
   assert.deepEqual(after(bare()), [0, 5]);
   assert.deepEqual(after(build({ harvest: 1 })), [TALENTS.harvest.per, 5 + TALENTS.harvest.per]);
@@ -426,7 +426,7 @@ test('Moisson : chaque boss vaincu donne des PV maximum', () => {
 
 test('Sursaut : dégâts accrus quand la vie est basse', () => {
   const low = arena(build({ surge: 1 }));
-  low.player.hp = 2;
+  low.players[0].hp = 2;
   const high = arena(build({ surge: 1 }));
   assert.equal(hitDamage(low), hitDamage(high) * (1 + TALENTS.surge.per));
 });
@@ -434,33 +434,33 @@ test('Sursaut : dégâts accrus quand la vie est basse', () => {
 test('Défi de la Mort : on se relève une fois avec une part de ses PV, la seconde mort est définitive', () => {
   for (let rank = 1; rank <= TALENTS.defiance.ranks; rank++) {
     const s = arena(build({ defiance: rank }));
-    hurtPlayer(s, 999, 0, 0);
+    hurtPlayer(s, s.players[0], 999, 0, 0);
     assert.equal(s.status, 'playing');
-    assert.equal(s.player.hp, Math.round(s.player.maxHp * rank * TALENTS.defiance.per));
-    assert.ok(s.player.invuln > 0);
+    assert.equal(s.players[0].hp, Math.round(s.players[0].maxHp * rank * TALENTS.defiance.per));
+    assert.ok(s.players[0].invuln > 0);
     assert.ok(s.events.some((e) => e.type === 'defiance'));
-    s.player.invuln = 0;
-    hurtPlayer(s, 999, 0, 0);
+    s.players[0].invuln = 0;
+    hurtPlayer(s, s.players[0], 999, 0, 0);
     assert.equal(s.status, 'dead');
   }
   const s = arena(bare());
-  hurtPlayer(s, 999, 0, 0);
+  hurtPlayer(s, s.players[0], 999, 0, 0);
   assert.equal(s.status, 'dead', 'sans le talent, la mort reste définitive');
 });
 
 test('Racines nourricières : soin à chaque nouvel étage', () => {
   const r = TALENTS.roots.ranks;
   const s = onStairs(build({ roots: r }));
-  s.player.hp = 3;
+  s.players[0].hp = 3;
   stepGame(s, { choice: 0 });
-  assert.equal(s.player.hp, 3 + r * TALENTS.roots.per);
+  assert.equal(s.players[0].hp, 3 + r * TALENTS.roots.per);
 });
 
 // ---------- Hermès ----------
 
 test('Pas léger et Ombre fugace : esquive rechargée plus vite, plus longtemps invulnérable', () => {
-  const a = playerStats(arena(bare()).player);
-  const b = playerStats(arena(build({ lightstep: 2, phantom: 2 })).player);
+  const a = playerStats(arena(bare()).players[0]);
+  const b = playerStats(arena(build({ lightstep: 2, phantom: 2 })).players[0]);
   assert.ok(Math.abs(b.dashCooldown / a.dashCooldown - 0.8) < 1e-9);
   assert.ok(Math.abs(b.dashInvuln - a.dashInvuln - 0.16) < 1e-9);
 });
@@ -481,9 +481,9 @@ test('Second souffle : deux esquives enchaînées, une seule sans', () => {
   run(s, 2, { dash: true });
   run(s, ticks(SIM.player.dash.duration) + 2, {});
   run(s, 2, { dash: true });
-  assert.equal(s.player.dashCharges, 0);
-  run(s, ticks(playerStats(s.player).dashCooldown) * 2 + 5, {});
-  assert.equal(s.player.dashCharges, 2);
+  assert.equal(s.players[0].dashCharges, 0);
+  run(s, ticks(playerStats(s.players[0]).dashCooldown) * 2 + 5, {});
+  assert.equal(s.players[0].dashCharges, 2);
 });
 
 test("Élan : le premier coup après une esquive est renforcé, pas le suivant", () => {
@@ -491,7 +491,7 @@ test("Élan : le premier coup après une esquive est renforcé, pas le suivant",
   const e = addEnemy(s, 'shade', 11.5, 13.2, { hp: 100, maxHp: 100, mode: 'recover', timer: 999 });
   stepGame(s, { moveX: 1, dash: true });
   run(s, ticks(SIM.player.dash.duration) + 1);
-  Object.assign(s.player, { x: 11.5, z: 11.5, vx: 0, vz: 0 });
+  Object.assign(s.players[0], { x: 11.5, z: 11.5, vx: 0, vz: 0 });
   Object.assign(e, { x: 11.5, z: 12.6, kvx: 0, kvz: 0 });
   stepGame(s, { ...SOUTH, attack: true });
   const first = 100 - e.hp;
@@ -508,7 +508,7 @@ test("Bouclier du vent : esquiver à travers une flèche la renvoie sur l'archer
   run(s, ticks(SIM.enemies.archer.windup) + 2);
   assert.equal(s.projectiles.length, 1);
   let guard = 0;
-  while (s.projectiles.length && s.projectiles[0].z - s.player.z > 1.2 && guard++ < 120) stepGame(s, {});
+  while (s.projectiles.length && s.projectiles[0].z - s.players[0].z > 1.2 && guard++ < 120) stepGame(s, {});
   stepGame(s, { moveX: 0, moveY: -1, dash: true });
   let reflected = false;
   for (let i = 0; i < 90 && archer.hp === 50; i++) {
@@ -516,7 +516,7 @@ test("Bouclier du vent : esquiver à travers une flèche la renvoie sur l'archer
     reflected ||= s.events.some((e) => e.type === 'reflect');
   }
   assert.ok(reflected, 'la flèche aurait dû être renvoyée');
-  assert.equal(s.player.hp, s.player.maxHp);
+  assert.equal(s.players[0].hp, s.players[0].maxHp);
   assert.ok(archer.hp < 50, "la flèche renvoyée aurait dû blesser l'archer");
 });
 
@@ -529,7 +529,7 @@ test('Danse des lames : esquiver à travers un ennemi le frappe une fois', () =>
     return 100 - e.hp;
   };
   assert.equal(pass(bare()), 0);
-  assert.equal(pass(build({ bladeDance: 1 })), playerStats(arena(build({ bladeDance: 1 })).player).damage);
+  assert.equal(pass(build({ bladeDance: 1 })), playerStats(arena(build({ bladeDance: 1 })).players[0]).damage);
 });
 
 // ---------- Charon ----------
@@ -540,7 +540,7 @@ test("Œil du passeur : plus d'oboles dans un coffre", () => {
     s.chests = [{ id: 1, x: 11.5, z: 11.5, opened: false }];
     stepGame(s, {});
     // Oboles déjà ramassées (le coffre est sous le héros) + celles encore au sol
-    return s.gold + s.pickups.filter((it) => it.kind === 'obol').reduce((t, it) => t + it.amount, 0);
+    return s.players[0].gold + s.pickups.filter((it) => it.kind === 'obol').reduce((t, it) => t + it.amount, 0);
   };
   const a = chestGold(bare());
   assert.equal(chestGold(build({ eye: 2 })), Math.round(a * 1.6));
@@ -549,41 +549,41 @@ test("Œil du passeur : plus d'oboles dans un coffre", () => {
 test('Marchandage : soin et relance moins chers chez Charon', () => {
   const a = onStairs(bare());
   const b = onStairs(build({ haggle: 2 }));
-  assert.equal(healCost(b), Math.round(healCost(a) / 2));
-  assert.equal(rerollCost(b), Math.round(rerollCost(a) / 2));
-  b.gold = healCost(b);
-  b.player.hp = 1;
+  assert.equal(healCost(b.players[0]), Math.round(healCost(a.players[0]) / 2));
+  assert.equal(rerollCost(b.players[0]), Math.round(rerollCost(a.players[0]) / 2));
+  b.players[0].gold = healCost(b.players[0]);
+  b.players[0].hp = 1;
   stepGame(b, { shop: 'heal' });
-  assert.equal(b.gold, 0);
-  assert.equal(b.player.hp, 1 + SIM.loot.healAmount);
+  assert.equal(b.players[0].gold, 0);
+  assert.equal(b.players[0].hp, 1 + SIM.loot.healAmount);
 });
 
 test('Faveur des dieux : 4 bienfaits ; Ami du passeur : 1 relance gratuite', () => {
   assert.equal(sanitizeIntent({ choice: 3 }).choice, 3);
   assert.equal(sanitizeIntent({ choice: 4 }).choice, -1);
   const s = onStairs(build({ choice4: 1, freeReroll: 1 }));
-  assert.equal(s.offer.boons.length, 4);
-  const gold = s.gold;
-  assert.equal(rerollCost(s), 0);
+  assert.equal(s.players[0].offer.boons.length, 4);
+  const gold = s.players[0].gold;
+  assert.equal(rerollCost(s.players[0]), 0);
   stepGame(s, { shop: 'reroll' });
-  assert.equal(s.gold, gold, 'la première relance doit être gratuite');
-  assert.ok(rerollCost(s) > 0);
-  const id = s.offer.boons[3];
+  assert.equal(s.players[0].gold, gold, 'la première relance doit être gratuite');
+  assert.ok(rerollCost(s.players[0]) > 0);
+  const id = s.players[0].offer.boons[3];
   stepGame(s, { choice: 3 });
-  assert.equal(s.player.boons[id], 1);
+  assert.equal(s.players[0].boons[id], 1);
   assert.equal(s.floorIndex, 1);
-  assert.equal(onStairs(bare()).offer.boons.length, 3);
+  assert.equal(onStairs(bare()).players[0].offer.boons.length, 3);
 });
 
 test('Pacte de Charon : la partie commence par le choix d\'un bienfait, sans descendre', () => {
   const s = createGameState('pacte', { meta: build({ pact: 1 }) });
   assert.equal(s.status, 'choosing');
-  assert.ok(s.offer.start);
-  const id = s.offer.boons[0];
+  assert.ok(s.players[0].offer.start);
+  const id = s.players[0].offer.boons[0];
   stepGame(s, { choice: 0 });
   assert.equal(s.status, 'playing');
   assert.equal(s.floorIndex, 0);
-  assert.equal(s.player.boons[id], 1);
+  assert.equal(s.players[0].boons[id], 1);
   assert.equal(createGameState('pacte', { meta: bare() }).status, 'playing');
 });
 

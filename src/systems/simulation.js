@@ -4,7 +4,7 @@
 
 import { SIM } from './simConfig.js';
 import { sanitizeIntent } from './intent.js';
-import { updatePlayer } from './player.js';
+import { updatePlayer, updateDowned } from './player.js';
 import { updateEnemies } from './enemies.js';
 import { updateProjectiles } from './projectiles.js';
 import { tickPoison } from './player.js';
@@ -13,39 +13,48 @@ import { updateLoot } from './loot.js';
 import { updateHazards } from './hazards.js';
 import { startDescent, updateDescent } from './descent.js';
 import { TILE, tileAt } from '../dungeon/tiles.js';
+import { isActive } from '../state/gameState.js';
 
 export const STEP = 1 / SIM.tickRate;
 
-export function stepGame(state, rawIntent) {
+// rawIntents : une intention (solo) ou un tableau d'intentions, une par joueur
+export function stepGame(state, rawIntents) {
   state.events = [];
-  const intent = sanitizeIntent(rawIntent);
-  // Écran de Charon : seul le choix est traité, le donjon est en pause
+  const list = Array.isArray(rawIntents) ? rawIntents : [rawIntents];
+  const intents = state.players.map((_, i) => sanitizeIntent(list[i]));
+  // Écran de Charon : seuls les choix sont traités, le donjon est en pause
   if (state.status === 'choosing') {
-    updateDescent(state, intent);
+    updateDescent(state, intents);
     return;
   }
   // Partie terminée (mort ou victoire) : l'état ne bouge plus (l'écran de fin s'affiche)
   if (state.status !== 'playing') return;
   state.tick++;
-  updatePlayer(state, intent, STEP);
+  state.players.forEach((p, i) => {
+    if (isActive(p)) updatePlayer(state, p, intents[i], STEP);
+  });
   updateEnemies(state, STEP);
   updateProjectiles(state, STEP);
   tickPoison(state);
   updateHazards(state);
+  if (state.players.length > 1) updateDowned(state);
   if (state.status !== 'playing') return;
   updateRooms(state);
   updateLoot(state, STEP);
   checkStairs(state);
 }
 
-// Marcher sur le centre de l'escalier ouvre l'écran de Charon (puis la descente)
+// Un héros debout sur le centre de l'escalier ouvre l'écran de Charon (puis la descente)
 function checkStairs(state) {
-  const p = state.player;
-  const c = Math.floor(p.x);
-  const r = Math.floor(p.z);
-  if (tileAt(state.dungeon, c, r) !== TILE.STAIRS) return;
-  const dx = p.x - (c + 0.5);
-  const dz = p.z - (r + 0.5);
-  if (dx * dx + dz * dz > SIM.stairsRadius * SIM.stairsRadius) return;
-  startDescent(state);
+  for (const p of state.players) {
+    if (!isActive(p)) continue;
+    const c = Math.floor(p.x);
+    const r = Math.floor(p.z);
+    if (tileAt(state.dungeon, c, r) !== TILE.STAIRS) continue;
+    const dx = p.x - (c + 0.5);
+    const dz = p.z - (r + 0.5);
+    if (dx * dx + dz * dz > SIM.stairsRadius * SIM.stairsRadius) continue;
+    startDescent(state);
+    return;
+  }
 }
