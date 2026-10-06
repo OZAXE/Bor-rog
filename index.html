@@ -77,6 +77,24 @@
         <p id="pause-help"></p>
       </div>
 
+      <!-- Deux progressions différentes (cet appareil / le compte) : le joueur choisit -->
+      <div id="cloud-conflict" class="hidden">
+        <h2>Deux progressions</h2>
+        <p>Ton compte en ligne et cet appareil n’ont pas la même progression. Laquelle garder ? L’autre sera remplacée.</p>
+        <div class="choices">
+          <section>
+            <h3>Cet appareil</h3>
+            <p class="summary-local"></p>
+            <button id="btn-keep-local" type="button">Garder celle-ci</button>
+          </section>
+          <section>
+            <h3 class="remote-title">Ton compte</h3>
+            <p class="summary-remote"></p>
+            <button id="btn-keep-remote" type="button">Garder celle-ci</button>
+          </section>
+        </div>
+      </div>
+
       <!-- Écran de Charon : choix d'un bienfait entre deux étages -->
       <div id="charon" class="hidden">
         <h2 id="charon-title">Charon, le passeur</h2>
@@ -117,7 +135,27 @@
           <h2>Le Seuil</h2>
           <p class="shadows"></p>
           <p class="gained"></p>
+          <!-- Compte en ligne : état de la sauvegarde ; un clic ouvre le panneau du compte -->
+          <button class="btn-account" type="button"></button>
         </header>
+        <!-- Panneau du compte (connexion, création, déconnexion) -->
+        <section class="account hidden">
+          <p class="account-status"></p>
+          <form class="account-form" novalidate>
+            <input name="name" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="20" placeholder="Pseudo" />
+            <input name="password" type="password" autocomplete="current-password" maxlength="128" placeholder="Mot de passe (8 caractères ou plus)" />
+            <div class="buttons">
+              <button class="btn-login" type="submit">Se connecter</button>
+              <button class="btn-register" type="button">Créer un compte</button>
+            </div>
+            <p class="account-note">Pas d’e-mail : note bien ton mot de passe, il ne peut pas être récupéré. Le code d’export reste une sauvegarde de secours.</p>
+          </form>
+          <p class="account-msg"></p>
+          <div class="buttons">
+            <button class="btn-logout" type="button">Se déconnecter</button>
+            <button class="btn-close-account" type="button">Fermer</button>
+          </div>
+        </section>
         <!-- Choix de la classe (une carte par classe ; verrouillée tant que le boss n'est pas vaincu) -->
         <div class="classes"></div>
         <!-- Un onglet par attribut ; un seul arbre affiché à la fois -->
