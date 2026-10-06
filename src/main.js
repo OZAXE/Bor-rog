@@ -32,7 +32,7 @@ import { CLASSES } from './systems/classes.js';
 import { createThreshold } from './ui/threshold.js';
 import { createLobby } from './ui/lobby.js';
 import { createNetGame } from './net/netGame.js';
-import { stateFromSnapshot } from './net/protocol.js';
+import { stateFromSnapshot, codeFromLink } from './net/protocol.js';
 
 // ---------------------------------------------------------------------------
 // Organisation :
@@ -490,6 +490,16 @@ function openLobby() {
   lobby.open();
 }
 $('btn-online').addEventListener('click', openLobby);
+// Lien d'invitation (?join=CODE, QR code scanné) : on rejoint le salon tout de suite.
+// Le paramètre est retiré de l'adresse pour qu'un rechargement ne rejoigne pas à nouveau.
+const invitedTo = codeFromLink(window.location.search);
+if (invitedTo) {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('join');
+  window.history.replaceState(null, '', url);
+  startScreen.classList.add('hidden');
+  lobby.joinFromLink(invitedTo);
+}
 $('threshold').querySelector('.btn-online').addEventListener('click', openLobby);
 $('lobby').querySelector('.btn-close-lobby').addEventListener('click', () => {
   // Retour : au Seuil après une partie, sinon à l'écran titre
@@ -867,8 +877,8 @@ function lerpAngle(a, b, t) {
 // Bloque les gestes du navigateur (défilement, pinch-zoom iOS, double-tap, menu contextuel)
 function blockBrowserGestures() {
   const prevent = (e) => e.preventDefault();
-  // Les écrans à faire défiler (Seuil, Charon) gardent le défilement au doigt
-  document.addEventListener('touchmove', (e) => !e.target.closest?.('#threshold, #charon') && e.preventDefault(), {
+  // Les écrans à faire défiler (Seuil, Charon, salon en ligne) gardent le défilement au doigt
+  document.addEventListener('touchmove', (e) => !e.target.closest?.('#threshold, #charon, #lobby') && e.preventDefault(), {
     passive: false,
   });
   document.addEventListener('gesturestart', prevent);
