@@ -22,6 +22,10 @@ jobs:
       - name: Installation des dépendances
         run: npm ci
 
+      # Le serveur a ses propres dépendances (Postgres, WebSocket) : ses tests en ont besoin
+      - name: Installation des dépendances du serveur
+        run: npm ci --prefix server
+
       - name: Tests (simulation, génération, déterminisme)
         run: npm test
 

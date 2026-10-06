@@ -189,7 +189,7 @@ test('CORS : seul le site du jeu est autorisé ; requêtes abîmées ou énormes
   assert.match(pre.headers.get('access-control-allow-headers'), /authorization/);
   const evil = await fetch(`${base}/health`, { headers: { origin: 'https://pirate.example' } });
   assert.equal(evil.headers.get('access-control-allow-origin'), null);
-  assert.deepEqual(await evil.json(), { ok: true, service: 'bor-rog', api: 1, db: 'ok' });
+  assert.deepEqual(await evil.json(), { ok: true, service: 'bor-rog', api: 2, db: 'ok' });
 
   const api = client();
   const r = await fetch(`${base}/api/login`, { method: 'POST', body: '{pas du json' });

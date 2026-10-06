@@ -2,8 +2,9 @@
 # Le jeu lui-même reste sur GitHub Pages : seul le serveur tourne ici.
 # Render relit ce fichier à chaque modification poussée sur main.
 #
-# Pas de rootDir : le serveur réutilise les règles du profil du jeu (src/meta, src/systems),
-# il lui faut donc tout le dépôt. buildFilter limite les redéploiements aux fichiers utiles.
+# Pas de rootDir : le serveur réutilise le code du jeu (règles du profil, et toute la
+# simulation pour les parties en ligne), il lui faut donc tout le dépôt. buildFilter
+# limite les redéploiements aux fichiers utiles.
 services:
   - type: web
     name: bor-rog-server
@@ -17,8 +18,11 @@ services:
       paths:
         - server/**
         - src/meta/**
-        - src/systems/classes.js
-        - src/systems/simConfig.js
+        - src/systems/**
+        - src/state/**
+        - src/dungeon/**
+        - src/core/**
+        - src/net/**
         - render.yaml
     envVars:
       - key: NODE_VERSION

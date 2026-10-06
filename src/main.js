@@ -30,6 +30,9 @@ import { createAccount } from './ui/account.js';
 import { serializeRun, parseRun, runSummary } from './state/savegame.js';
 import { CLASSES } from './systems/classes.js';
 import { createThreshold } from './ui/threshold.js';
+import { createLobby } from './ui/lobby.js';
+import { createNetGame } from './net/netGame.js';
+import { stateFromSnapshot } from './net/protocol.js';
 
 // ---------------------------------------------------------------------------
 // Organisation :
@@ -64,9 +67,16 @@ const newState = (s) => {
   const me = { meta: metaOf(profile.current), cls: profile.current.cls };
   return createGameState(s, COOP_BOT ? { players: [me, botPlayer()] } : me);
 };
-// Le joueur de cet écran (toujours le premier en local)
-const me = () => state.players[0];
+// Le joueur de cet écran : le premier en local ; en ligne, la place donnée par le serveur
+let myIndex = 0;
+const me = () => state.players[myIndex];
+const allyOf = () => state.players.find((p, i) => i !== myIndex);
 let allyBot = createAllyBot(1);
+// Partie en ligne (étape 8d) : null en solo. net = affichage et prédiction, session = connexion
+let net = null;
+let session = null;
+// Mon héros tel qu'il faut le dessiner et viser : prédit en ligne, réel en local
+const heroNow = () => (net ? net.hero() : me());
 
 // ---- État ----
 let state = newState(seed);
@@ -154,8 +164,8 @@ function aimFromMouse(px, py) {
   ndc.set((px / window.innerWidth) * 2 - 1, -(py / window.innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, cam.camera);
   if (!raycaster.ray.intersectPlane(aimPlane, hit)) return null;
-  const dx = hit.x - me().x;
-  const dz = hit.z - me().z;
+  const dx = hit.x - heroNow().x;
+  const dz = hit.z - heroNow().z;
   const len = Math.hypot(dx, dz);
   if (len < 0.3) return null; // souris sur le héros : pas de direction fiable
   return { x: dx / len, y: -dz / len };
@@ -189,7 +199,7 @@ window.addEventListener('keydown', (e) => {
 });
 // Quitter l'onglet met le jeu en pause
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && state.status === 'playing' && !threshold.isOpen()) setPlaying(false);
+  if (document.hidden && state.status === 'playing' && !threshold.isOpen() && !net) setPlaying(false);
   if (document.hidden) autosave();
 });
 
@@ -224,9 +234,11 @@ pauseBtn.addEventListener('click', () => {
 $('btn-resume').addEventListener('click', () => setPlaying(true));
 $('btn-pause-abandon').addEventListener('click', () => {
   const earned = shadowsEarned(state.shadows, profile.current);
-  if (!window.confirm(`Abandonner la descente ? Tu gardes les ${earned} Ombres déjà gagnées.`)) return;
+  const what = net ? 'Quitter la partie en ligne' : 'Abandonner la descente';
+  if (!window.confirm(`${what} ? Tu gardes les ${earned} Ombres déjà gagnées.`)) return;
   pauseScreen.classList.add('hidden');
   endOfRun();
+  leaveOnline();
   openThreshold();
 });
 $('pause-help').innerHTML = DEVICE.isMobile
@@ -279,7 +291,7 @@ function updateHud() {
   $('gold').textContent = `${me().gold} obole${me().gold > 1 ? 's' : ''}`;
   $('shadows').textContent = `${state.shadows} Ombre${state.shadows > 1 ? 's' : ''}`;
   // Co-op : vie de l'allié (ou son état), et mon propre compte à rebours si je suis à terre
-  const a = state.players[1];
+  const a = allyOf();
   const allyEl = $('ally-hud');
   allyEl.hidden = !a;
   if (a) {
@@ -293,8 +305,11 @@ function updateHud() {
   }
   const downEl = $('down-info');
   const mine = me();
-  downEl.classList.toggle('on', state.status === 'playing' && (mine.down > 0 || mine.out));
-  if (mine.down > 0) downEl.textContent = `À terre · ${Math.ceil(mine.down / 60)} s pour être relevé`;
+  // Co-op chez Charon : mon choix est fait, l'allié choisit encore
+  const waiting = state.status === 'choosing' && !mine.offer && started;
+  downEl.classList.toggle('on', (state.status === 'playing' && (mine.down > 0 || mine.out)) || waiting);
+  if (waiting) downEl.textContent = 'Ton allié choisit son bienfait…';
+  else if (mine.down > 0) downEl.textContent = `À terre · ${Math.ceil(mine.down / 60)} s pour être relevé`;
   else if (mine.out) downEl.textContent = 'Tu reviendras à l’étage suivant';
   const boonKey = JSON.stringify(p.boons);
   if (boonKey !== lastBoonKey) {
@@ -353,7 +368,7 @@ function updateCharon() {
     btn.className = 'boon-card';
     btn.type = 'button';
     btn.innerHTML = `<b>${b.name}</b><span>${b.text}</span><small>${lvl ? `niveau ${lvl} → ${lvl + 1}` : 'nouveau'}${DEVICE.isMobile ? '' : ` · touche ${i + 1}`}</small>`;
-    btn.addEventListener('click', () => (pendingAction = { choice: i }));
+    btn.addEventListener('click', () => act({ choice: i }));
     cards.appendChild(btn);
   });
   if (!me().offer.boons.length) {
@@ -361,7 +376,7 @@ function updateCharon() {
     btn.className = 'boon-card';
     btn.type = 'button';
     btn.innerHTML = '<b>Descendre</b><span>Les dieux n\'ont plus rien à t\'offrir</span>';
-    btn.addEventListener('click', () => (pendingAction = { choice: 0 }));
+    btn.addEventListener('click', () => act({ choice: 0 }));
     cards.appendChild(btn);
   }
   const p = me();
@@ -373,14 +388,20 @@ function updateCharon() {
   reroll.disabled = me().gold < rerollCost(me());
   $('charon-gold').textContent = `${me().gold} oboles · ${p.hp} / ${p.maxHp} PV`;
 }
-$('btn-heal').addEventListener('click', () => (pendingAction = { shop: 'heal' }));
-$('btn-reroll').addEventListener('click', () => (pendingAction = { shop: 'reroll' }));
+// Un choix chez Charon : intention du prochain pas en local, message au serveur en ligne
+function act(action) {
+  if (net) session.send({ t: 'act', ...action });
+  else pendingAction = action;
+}
+$('btn-heal').addEventListener('click', () => act({ shop: 'heal' }));
+$('btn-reroll').addEventListener('click', () => act({ shop: 'reroll' }));
 window.addEventListener('keydown', (e) => {
   if (state.status !== 'choosing') return;
   const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Numpad1', 'Numpad2', 'Numpad3', 'Numpad4'].indexOf(e.code);
-  if (n >= 0) pendingAction = { choice: n % 4 };
-  if (e.code === 'KeyH') pendingAction = { shop: 'heal' };
-  if (e.code === 'KeyR') pendingAction = { shop: 'reroll' };
+  if (!me().offer) return;
+  if (n >= 0) act({ choice: n % 4 });
+  if (e.code === 'KeyH') act({ shop: 'heal' });
+  if (e.code === 'KeyR') act({ shop: 'reroll' });
 });
 
 // ---- Mort et nouvelle partie ----
@@ -420,6 +441,8 @@ function endOfRun() {
   clearRun(); // la descente est finie : plus rien à reprendre
   lastEarned = recordRun(profile.current, state);
   storeProfile();
+  // Partie en ligne finie : le serveur ferme le salon ; on se déconnecte
+  if (net && state.status !== 'playing' && state.status !== 'choosing') leaveOnline();
 }
 const threshold = createThreshold({
   root: $('threshold'),
@@ -450,6 +473,71 @@ function storeProfile() {
 }
 account.start();
 
+// ---- Jouer à deux en ligne (étape 8d) ----
+// Le serveur fait tourner la partie ; ce navigateur envoie mes commandes et affiche
+// ce que le serveur renvoie (cf. src/net/netGame.js). Pas de pause en ligne : le menu
+// s'affiche mais la partie continue pour l'allié.
+const lobby = createLobby({
+  root: $('lobby'),
+  serverUrl: params.get('server') || CONFIG.server.url,
+  // Pseudo du compte s'il y en a un (sinon « Invité », cf. cleanPlayerName)
+  info: () => ({ name: account.name(), cls: profile.current.cls, meta: metaOf(profile.current) }),
+  onStart: startOnline,
+});
+function openLobby() {
+  startScreen.classList.add('hidden');
+  threshold.close();
+  lobby.open();
+}
+$('btn-online').addEventListener('click', openLobby);
+$('threshold').querySelector('.btn-online').addEventListener('click', openLobby);
+$('lobby').querySelector('.btn-close-lobby').addEventListener('click', () => {
+  // Retour : au Seuil après une partie, sinon à l'écran titre
+  if (started) openThreshold();
+  else startScreen.classList.remove('hidden');
+});
+
+function startOnline(start, s) {
+  abandonSavedRun();
+  clearRun();
+  session = s;
+  session.handler = onlineMessage;
+  session.statusHandler = (text) => text && showBanner(text, 'danger');
+  session.lostHandler = () => {
+    if (!net) return;
+    showBanner('Connexion perdue', 'danger');
+    endOfRun();
+    leaveOnline();
+    openThreshold();
+  };
+  myIndex = start.you;
+  net = createNetGame(start, (msg) => session.send(msg));
+  $('btn-retry').hidden = true; // « même graine » n'a pas de sens pour une partie en ligne
+  threshold.close();
+  adoptState(stateFromSnapshot(start.fixed, start.snap));
+  if (DEVICE.isMobile) enterFullscreen();
+  setPlaying(true);
+}
+
+function onlineMessage(msg) {
+  if (!net) return;
+  if (msg.t === 'start') {
+    // Retour après une coupure : on reprend l'affichage depuis l'état actuel du serveur
+    net = createNetGame(msg, (m) => session.send(m));
+    showBanner('De retour dans la partie', 'calm');
+    return;
+  }
+  if (msg.t === 'left') showBanner(msg.name === 'Invité' ? 'Ton allié a quitté la partie' : `${msg.name} a quitté la partie`, 'danger');
+  else if (msg.t === 'error') showBanner(msg.message, 'danger');
+  else net.receive(msg);
+}
+
+function leaveOnline() {
+  if (session) session.leave();
+  session = null;
+  net = null;
+}
+
 function openThreshold() {
   deathScreen.classList.add('hidden');
   victoryScreen.classList.add('hidden');
@@ -463,6 +551,9 @@ $('btn-victory-threshold').addEventListener('click', openThreshold);
 function restart(newSeed) {
   abandonSavedRun();
   clearRun();
+  leaveOnline();
+  myIndex = 0;
+  $('btn-retry').hidden = false;
   adoptState(newState(newSeed));
 }
 
@@ -475,10 +566,11 @@ function adoptState(next) {
   window.__game.state = state;
   deathScreen.classList.add('hidden');
   victoryScreen.classList.add('hidden');
-  prev.x = me().x;
-  prev.z = me().z;
-  prev.facing = me().facing;
-  if (state.players[1]) Object.assign(prevAlly, { x: state.players[1].x, z: state.players[1].z, facing: state.players[1].facing });
+  prev.x = heroNow().x;
+  prev.z = heroNow().z;
+  prev.facing = heroNow().facing;
+  const ally = allyOf();
+  if (ally) Object.assign(prevAlly, { x: ally.x, z: ally.z, facing: ally.facing });
   allyBot = createAllyBot(1);
   prevEnemies.clear();
   gateView.reset();
@@ -500,8 +592,9 @@ $('btn-new').addEventListener('click', () => restart(randomSeed()));
 let savedRun = parseRun(loadRunText());
 let autosaveTimer = 0;
 function autosave() {
-  // Rien à sauvegarder avant la première partie ni après sa fin (mort, victoire, abandon)
-  if (!started || recorded || (state.status !== 'playing' && state.status !== 'choosing')) return;
+  // Rien à sauvegarder avant la première partie ni après sa fin (mort, victoire, abandon),
+  // ni en ligne (la partie vit sur le serveur)
+  if (net || !started || recorded || (state.status !== 'playing' && state.status !== 'choosing')) return;
   saveRun(serializeRun(state));
 }
 function abandonSavedRun() {
@@ -555,7 +648,7 @@ function tick() {
   prev.x = me().x;
   prev.z = me().z;
   prev.facing = me().facing;
-  const ally = state.players[1];
+  const ally = allyOf();
   if (ally) Object.assign(prevAlly, { x: ally.x, z: ally.z, facing: ally.facing });
   for (const e of state.enemies) prevEnemies.set(e.id, { x: e.x, z: e.z });
   let intent = EMPTY_INTENT;
@@ -564,7 +657,21 @@ function tick() {
     pendingAction = null;
   } else if (playing) intent = input.getIntent(cam.screenToWorld, aimFromMouse);
   stepGame(state, state.players.length > 1 ? [intent, allyBot(state)] : intent);
-  for (const ev of state.events) {
+  handleEvents(state.events);
+}
+
+// En ligne : un pas local = mon intention, prédite tout de suite et envoyée au serveur
+function netTick() {
+  prev.x = net.hero().x;
+  prev.z = net.hero().z;
+  prev.facing = net.hero().facing;
+  const intent = playing && state.status === 'playing' ? input.getIntent(cam.screenToWorld, aimFromMouse) : EMPTY_INTENT;
+  net.localStep(intent);
+}
+
+// Effets, bandeaux et flash à partir des événements de la simulation
+function handleEvents(events) {
+  for (const ev of events) {
     effects.handle(ev);
     if (ev.type === 'roomLocked') {
       const boss = state.enemies.find((e) => e.boss);
@@ -579,11 +686,11 @@ function tick() {
       showBanner('Salle purifiée', 'calm');
     }
     if (ev.type === 'defiance') showBanner('Défi de la Mort', 'calm');
-    if (ev.type === 'playerDown') showBanner(ev.player === 0 ? 'À terre ! Ton allié peut te relever' : 'Ton allié est à terre : va le relever', 'danger');
-    if (ev.type === 'playerRevived') showBanner(ev.player === 0 ? 'Relevé !' : 'Allié relevé', 'calm');
-    if (ev.type === 'playerOut') showBanner(ev.player === 0 ? 'Tu reviendras à l’étage suivant' : 'Ton allié reviendra à l’étage suivant', 'danger');
+    if (ev.type === 'playerDown') showBanner(ev.player === myIndex ? 'À terre ! Ton allié peut te relever' : 'Ton allié est à terre : va le relever', 'danger');
+    if (ev.type === 'playerRevived') showBanner(ev.player === myIndex ? 'Relevé !' : 'Allié relevé', 'calm');
+    if (ev.type === 'playerOut') showBanner(ev.player === myIndex ? 'Tu reviendras à l’étage suivant' : 'Ton allié reviendra à l’étage suivant', 'danger');
     // Le flash rouge ne concerne que mon héros
-    if (ev.type === 'playerHurt' && ev.player === 0) {
+    if (ev.type === 'playerHurt' && ev.player === myIndex) {
       hurtFlash.classList.add('on');
       clearTimeout(hurtTimeout);
       hurtTimeout = setTimeout(() => hurtFlash.classList.remove('on'), 90);
@@ -602,7 +709,26 @@ function frame(timestamp) {
   const dt = timer.getDelta();
   const time = timer.getElapsed();
 
-  const alpha = playing && state.status !== 'dead' ? loop.advance(dt, tick) : 1;
+  let alpha;
+  let heroAlpha;
+  if (net) {
+    // En ligne : mon héros avance au pas local (prédit), le reste suit les instantanés du serveur
+    heroAlpha = loop.advance(dt, netTick);
+    net.flush();
+    const v = net.advance(dt);
+    if (v.changed) {
+      for (const e of v.previous.enemies) prevEnemies.set(e.id, { x: e.x, z: e.z });
+      const pa = v.previous.players.find((q, i) => i !== myIndex);
+      if (pa) Object.assign(prevAlly, { x: pa.x, z: pa.z, facing: pa.facing });
+      state = v.state;
+      window.__game.state = state;
+    }
+    handleEvents(v.events);
+    alpha = v.alpha;
+  } else {
+    alpha = playing && state.status !== 'dead' ? loop.advance(dt, tick) : 1;
+    heroAlpha = alpha;
+  }
   // Question du compte en attente (deux progressions) : affichée dès que la partie le permet
   account.showPending();
   // Sauvegarde automatique de la descente toutes les 3 secondes de jeu
@@ -615,28 +741,31 @@ function frame(timestamp) {
   if (state.floorIndex !== viewFloor) {
     rebuildFloor();
     gateView.reset();
-    prev.x = me().x;
-    prev.z = me().z;
-    if (state.players[1]) Object.assign(prevAlly, { x: state.players[1].x, z: state.players[1].z });
+    prev.x = heroNow().x;
+    prev.z = heroNow().z;
+    const ally = allyOf();
+    if (ally) Object.assign(prevAlly, { x: ally.x, z: ally.z });
     prevEnemies.clear();
   }
 
   const p = me();
-  const x = prev.x + (p.x - prev.x) * alpha;
-  const z = prev.z + (p.z - prev.z) * alpha;
-  const facing = lerpAngle(prev.facing, p.facing, alpha);
+  const h = heroNow(); // position, vitesse et esquive : prédites en ligne
+  let x = prev.x + (h.x - prev.x) * heroAlpha;
+  let z = prev.z + (h.z - prev.z) * heroAlpha;
+  if (net) ({ x, z } = net.heroView(heroAlpha));
+  const facing = lerpAngle(prev.facing, h.facing, heroAlpha);
   playerView.setClass(p.cls);
   setAttackLabel(p.cls);
   updateSpecial();
   updatePauseButton();
-  playerView.update(x, z, facing, Math.hypot(p.vx, p.vz), time, {
-    blink: p.invuln > 0 && p.dashTimer === 0 && p.down === 0 && state.status === 'playing',
-    dashing: p.dashTimer > 0,
+  playerView.update(x, z, facing, Math.hypot(h.vx, h.vz), time, {
+    blink: p.invuln > 0 && h.dashTimer === 0 && p.down === 0 && state.status === 'playing',
+    dashing: h.dashTimer > 0,
     down: p.down > 0,
     hidden: p.out,
   });
   // Co-op : l'allié
-  const a = state.players[1];
+  const a = allyOf();
   if (a) {
     allyView.setClass(a.cls);
     allyView.update(

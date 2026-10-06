@@ -143,7 +143,8 @@ export function enterFloor(state, floorIndex) {
     p.vz = 0;
     p.dashTimer = 0;
     // Co-op : un héros tombé revient au nouvel étage, avec la moitié de sa vie
-    if (p.out || p.down > 0) {
+    // (sauf s'il a quitté la partie en ligne : il reste hors jeu)
+    if ((p.out || p.down > 0) && !p.left) {
       p.out = false;
       p.down = 0;
       p.revive = 0;

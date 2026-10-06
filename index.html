@@ -80,6 +80,25 @@
         <p id="pause-help"></p>
       </div>
 
+      <!-- Jouer à deux en ligne : créer un salon ou en rejoindre un avec son code -->
+      <div id="lobby" class="hidden">
+        <h2>Jouer à deux</h2>
+        <p class="lobby-status"></p>
+        <div class="lobby-choose">
+          <button class="btn-create-room" type="button">Créer un salon</button>
+          <form class="lobby-join">
+            <input class="room-code-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="4" placeholder="CODE" />
+            <button type="submit">Rejoindre</button>
+          </form>
+        </div>
+        <div class="lobby-room" hidden>
+          <p class="room-code"></p>
+          <ul class="room-players"></ul>
+          <button class="btn-start-room" type="button">Lancer la descente</button>
+        </div>
+        <button class="btn-close-lobby" type="button">Retour</button>
+      </div>
+
       <!-- Deux progressions différentes (cet appareil / le compte) : le joueur choisit -->
       <div id="cloud-conflict" class="hidden">
         <h2>Deux progressions</h2>
@@ -177,6 +196,7 @@
           <button class="btn-descend" type="button">Descendre</button>
           <button class="btn-same-seed" type="button">Rejouer la même graine</button>
           <button class="btn-refund" type="button">Reprendre mes talents</button>
+          <button class="btn-online" type="button">Jouer à deux</button>
         </div>
         <div class="buttons small">
           <button class="btn-export" type="button">Exporter ma progression</button>
@@ -211,6 +231,7 @@
         </div>
         <div class="buttons">
           <button id="btn-open-threshold" type="button">Le Seuil</button>
+          <button id="btn-online" type="button">Jouer à deux</button>
         </div>
       </div>
     </div>
