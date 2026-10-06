@@ -1,16 +1,25 @@
 # Configuration Render (« Blueprint ») du serveur de Bor-rog.
-# Le jeu lui-même reste sur GitHub Pages : seul le dossier server/ est déployé ici.
+# Le jeu lui-même reste sur GitHub Pages : seul le serveur tourne ici.
 # Render relit ce fichier à chaque modification poussée sur main.
+#
+# Pas de rootDir : le serveur réutilise les règles du profil du jeu (src/meta, src/systems),
+# il lui faut donc tout le dépôt. buildFilter limite les redéploiements aux fichiers utiles.
 services:
   - type: web
     name: bor-rog-server
     runtime: node
     plan: free # s'endort après 15 min sans visite, ~1 min pour se réveiller
     region: frankfurt # à côté de la base Neon (Francfort)
-    rootDir: server # seuls les changements dans server/ relancent un déploiement
-    buildCommand: npm ci
-    startCommand: npm start
+    buildCommand: cd server && npm ci
+    startCommand: node server/index.js
     healthCheckPath: /health
+    buildFilter:
+      paths:
+        - server/**
+        - src/meta/**
+        - src/systems/classes.js
+        - src/systems/simConfig.js
+        - render.yaml
     envVars:
       - key: NODE_VERSION
         value: "22"

@@ -1,6 +1,11 @@
 // Réglages d'AFFICHAGE et de CONTRÔLE. Les règles du jeu sont dans src/systems/simConfig.js.
 
 export const CONFIG = {
+  // Serveur des comptes (Render). ?server=http://localhost:10000 dans l'adresse pour tester en local.
+  server: {
+    url: 'https://bor-rog-server.onrender.com',
+  },
+
   render: {
     // Un écran x3 rendrait 9 fois plus de pixels qu'en x1 : on plafonne
     maxPixelRatioMobile: 1.5,

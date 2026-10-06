@@ -1247,3 +1247,152 @@ body {
     gap: 4px;
   }
 }
+
+/* ---------- Compte en ligne (étape 8b) ---------- */
+#threshold .btn-account {
+  margin-top: 6px;
+  font: 600 13px var(--antique);
+  padding: 6px 12px;
+  color: var(--texte);
+  background: transparent;
+  border: 1px solid #4a3f7a;
+  cursor: pointer;
+}
+
+#threshold .btn-account[data-status='synced'] {
+  color: var(--spectral);
+  border-color: #1f6b47;
+}
+
+#threshold .btn-account[data-status='offline'],
+#threshold .btn-account[data-status='expired'],
+#threshold .btn-account[data-status='conflict'] {
+  color: var(--accent);
+  border-color: #7a6233;
+}
+
+#threshold .account {
+  width: min(100%, 460px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #0b0a14;
+  border: 2px solid #4a3f7a;
+}
+
+#threshold .account.hidden,
+#threshold .account [hidden] {
+  display: none;
+}
+
+#threshold .account p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#threshold .account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#threshold .account input {
+  width: 100%;
+  padding: 10px;
+  font: 16px system-ui, sans-serif; /* 16 px : iOS ne zoome pas sur le champ */
+  color: var(--texte);
+  background: #05080a;
+  border: 1px solid #4a3f7a;
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: auto;
+}
+
+#threshold .account .buttons {
+  justify-content: center;
+}
+
+#threshold .account-note {
+  color: #9a93b5;
+}
+
+#threshold .account-msg {
+  color: var(--accent);
+}
+
+#threshold .account-msg:empty {
+  display: none;
+}
+
+/* Deux progressions différentes : choix du joueur, au-dessus de tout */
+#cloud-conflict {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: 12px;
+  padding: 16px;
+  overflow-y: auto;
+  text-align: center;
+  background: rgba(5, 8, 10, 0.94);
+}
+
+#cloud-conflict.hidden {
+  display: none;
+}
+
+#cloud-conflict h2 {
+  margin: 0;
+  font-size: clamp(24px, 6vw, 36px);
+  letter-spacing: 3px;
+  color: var(--ombre);
+}
+
+#cloud-conflict > p {
+  margin: 0;
+  max-width: 520px;
+  line-height: 1.5;
+}
+
+#cloud-conflict .choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+#cloud-conflict section {
+  width: min(100%, 260px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #0b0a14;
+  border: 2px solid #4a3f7a;
+}
+
+#cloud-conflict h3 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--accent);
+}
+
+#cloud-conflict section p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+#cloud-conflict button {
+  font: 600 14px var(--antique);
+  padding: 10px 14px;
+  color: var(--ombre);
+  background: transparent;
+  border: 2px solid var(--ombre);
+  cursor: pointer;
+}

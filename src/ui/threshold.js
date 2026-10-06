@@ -266,5 +266,9 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
       root.classList.add('hidden');
     },
     isOpen: () => !root.classList.contains('hidden'),
+    // Le profil a été remplacé (compte en ligne) : redessiner si le Seuil est affiché
+    refresh() {
+      if (!root.classList.contains('hidden')) render();
+    },
   };
 }

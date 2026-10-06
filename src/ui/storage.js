@@ -52,3 +52,33 @@ export function clearRun() {
     /* stockage indisponible : rien à effacer */
   }
 }
+
+// ---------- Compte en ligne (étape 8b) ----------
+// { name, token, rev, dirty } : pseudo, jeton de session (null = déconnecté), dernière
+// version en ligne connue, et changements pas encore envoyés. Jamais le mot de passe.
+
+const ACCOUNT_KEY = 'bor-rog.compte';
+
+export function loadAccount() {
+  try {
+    const a = JSON.parse(window.localStorage.getItem(ACCOUNT_KEY));
+    if (!a || typeof a.name !== 'string') return null;
+    return {
+      name: a.name,
+      token: typeof a.token === 'string' ? a.token : null,
+      rev: Number.isInteger(a.rev) ? a.rev : 0,
+      dirty: a.dirty === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveAccount(account) {
+  try {
+    if (account) window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
+    else window.localStorage.removeItem(ACCOUNT_KEY);
+  } catch {
+    /* stockage indisponible : le compte sera redemandé à la prochaine visite */
+  }
+}

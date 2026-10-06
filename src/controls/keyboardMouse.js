@@ -25,6 +25,8 @@ export function createKeyboardMouse(canvas) {
   const is = (action) => KEYS[action].some((code) => pressed.has(code));
 
   window.addEventListener('keydown', (e) => {
+    // Saisie dans un champ (pseudo, mot de passe, code) : ce n'est pas une commande de jeu
+    if (e.target.closest?.('input, textarea')) return;
     pressed.add(e.code);
     // Empêche le défilement de la page avec espace / flèches
     if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();

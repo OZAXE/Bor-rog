@@ -25,6 +25,7 @@ import { zoneOf, FLOORS_PER_ZONE } from './dungeon/zones.js';
 import { createInput } from './controls/input.js';
 import { recordRun, metaOf, shadowsEarned } from './meta/profile.js';
 import { loadProfile, saveProfile, saveRun, loadRunText, clearRun } from './ui/storage.js';
+import { createAccount } from './ui/account.js';
 import { serializeRun, parseRun, runSummary } from './state/savegame.js';
 import { CLASSES } from './systems/classes.js';
 import { createThreshold } from './ui/threshold.js';
@@ -383,18 +384,37 @@ function endOfRun() {
   recorded = true;
   clearRun(); // la descente est finie : plus rien à reprendre
   lastEarned = recordRun(profile.current, state);
-  saveProfile(profile.current);
+  storeProfile();
 }
 const threshold = createThreshold({
   root: $('threshold'),
   profile,
-  onChange: () => saveProfile(profile.current),
+  onChange: () => storeProfile(),
   onDescend: (sameSeed) => {
     threshold.close();
     restart(sameSeed ? seed : randomSeed());
     setPlaying(true);
   },
 });
+// ---- Compte en ligne (étape 8b) ----
+// Le profil est toujours enregistré dans le navigateur, puis envoyé au serveur si le
+// joueur est connecté. Une question (deux progressions différentes) n'interrompt
+// jamais une partie : elle attend un moment calme (Seuil, pause, écran de fin).
+const account = createAccount({
+  root: $('threshold'),
+  conflictRoot: $('cloud-conflict'),
+  serverUrl: params.get('server') || CONFIG.server.url,
+  profile,
+  save: () => saveProfile(profile.current),
+  onReplaced: () => threshold.refresh(),
+  canPrompt: () => !(playing && (state.status === 'playing' || state.status === 'choosing')),
+});
+function storeProfile() {
+  saveProfile(profile.current);
+  account.changed();
+}
+account.start();
+
 function openThreshold() {
   deathScreen.classList.add('hidden');
   victoryScreen.classList.add('hidden');
@@ -450,7 +470,7 @@ function autosave() {
 function abandonSavedRun() {
   if (!savedRun) return;
   recordRun(profile.current, savedRun);
-  saveProfile(profile.current);
+  storeProfile();
   savedRun = null;
   $('resume-run').hidden = true;
 }
@@ -539,6 +559,8 @@ function frame(timestamp) {
   const time = timer.getElapsed();
 
   const alpha = playing && state.status !== 'dead' ? loop.advance(dt, tick) : 1;
+  // Question du compte en attente (deux progressions) : affichée dès que la partie le permet
+  account.showPending();
   // Sauvegarde automatique de la descente toutes les 3 secondes de jeu
   if (playing && (autosaveTimer += dt) > 3) {
     autosaveTimer = 0;
@@ -661,8 +683,8 @@ function blockBrowserGestures() {
     passive: false,
   });
   document.addEventListener('gesturestart', prevent);
-  // Le champ du code de sauvegarde garde la sélection et le menu "Coller" (appui long)
-  const outsideField = (e) => !e.target.closest?.('textarea') && e.preventDefault();
+  // Les champs (code de sauvegarde, compte) gardent la sélection et le menu "Coller" (appui long)
+  const outsideField = (e) => !e.target.closest?.('textarea, input') && e.preventDefault();
   document.addEventListener('dblclick', outsideField);
   document.addEventListener('contextmenu', outsideField);
 }
