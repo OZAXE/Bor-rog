@@ -23,7 +23,7 @@ import { SIM } from './systems/simConfig.js';
 import { ZONE_THEMES } from './render/zoneThemes.js';
 import { zoneOf, FLOORS_PER_ZONE } from './dungeon/zones.js';
 import { createInput } from './controls/input.js';
-import { recordRun, metaOf } from './meta/profile.js';
+import { recordRun, metaOf, shadowsEarned } from './meta/profile.js';
 import { loadProfile, saveProfile } from './ui/storage.js';
 import { createThreshold } from './ui/threshold.js';
 
@@ -159,13 +159,13 @@ startText.innerHTML = DEVICE.isMobile
   : 'Clique pour jouer<br><small>ZQSD / WASD : se déplacer · Souris : viser · Clic : frapper · Espace : esquiver · Échap : pause</small>';
 
 startScreen.addEventListener('click', (e) => {
-  if (e.target.closest('button')) return; // boutons du Seuil / d'abandon
+  if (e.target.closest('button')) return; // bouton du Seuil
   if (DEVICE.isMobile) enterFullscreen();
   setPlaying(true);
 });
 window.addEventListener('keydown', (e) => {
   if (threshold.isOpen()) return;
-  if ((e.code === 'Escape' || e.code === 'KeyP') && state.status === 'playing') setPlaying(!playing);
+  if ((e.code === 'Escape' || e.code === 'KeyP') && state.status === 'playing' && started) setPlaying(!playing);
 });
 // Quitter l'onglet met le jeu en pause
 document.addEventListener('visibilitychange', () => {
@@ -174,20 +174,51 @@ document.addEventListener('visibilitychange', () => {
 
 function setPlaying(value) {
   playing = value;
-  startScreen.classList.toggle('hidden', value);
+  // Avant la première partie : écran titre ; ensuite : menu de pause
+  startScreen.classList.toggle('hidden', value || started);
+  pauseScreen.classList.toggle('hidden', value || !started);
+  if (!value && started) showPauseInfo();
   // Le bandeau "Étage 1" n'apparaît qu'au vrai début de la partie
   // (sinon il s'anime derrière l'écran titre et chevauche le titre)
   if (value && !started) {
     started = true;
     showFloor(true);
+    startScreen.classList.add('hidden');
   }
-  if (!value) {
-    startText.innerHTML = DEVICE.isMobile ? 'Touche pour reprendre' : 'Clique pour reprendre';
-  }
-  // Avant la première partie : accès au Seuil ; en pause : abandon possible
+  // L'accès au Seuil depuis l'écran titre n'existe qu'avant la première partie
   $('btn-open-threshold').hidden = started;
-  $('btn-abandon').hidden = !started;
   loop.reset();
+}
+
+// ---- Pause ----
+// Bouton visible en partie (PC et mobile), menu avec Reprendre / Abandonner
+const pauseScreen = $('pause-screen');
+const pauseBtn = $('btn-pause');
+pauseBtn.addEventListener('click', () => {
+  if (state.status === 'playing' && started) setPlaying(false);
+});
+$('btn-resume').addEventListener('click', () => setPlaying(true));
+$('btn-pause-abandon').addEventListener('click', () => {
+  const earned = shadowsEarned(state.shadows, profile.current);
+  if (!window.confirm(`Abandonner la descente ? Tu gardes les ${earned} Ombres déjà gagnées.`)) return;
+  pauseScreen.classList.add('hidden');
+  endOfRun();
+  openThreshold();
+});
+$('pause-help').innerHTML = DEVICE.isMobile
+  ? '<small>Pouce gauche : se déplacer · Boutons : frapper, esquiver, capacité</small>'
+  : '<small>ZQSD / WASD : se déplacer · Souris : viser · Clic : frapper · Espace : esquiver · E ou clic droit : capacité · Échap : pause</small>';
+function showPauseInfo() {
+  const zone = zoneOf(state.floorIndex);
+  const earned = shadowsEarned(state.shadows, profile.current);
+  $('pause-info').innerHTML =
+    `Étage ${state.floorIndex + 1} · ${zone.name}<br>` +
+    `${state.kills} ennemi${state.kills > 1 ? 's' : ''} vaincu${state.kills > 1 ? 's' : ''} · ${state.gold} oboles · ` +
+    `<span class="earned">${earned} Ombres</span> à rapporter`;
+}
+// Le bouton pause n'apparaît qu'en pleine partie (pas sur les écrans de choix ou de fin)
+function updatePauseButton() {
+  pauseBtn.hidden = !(started && playing && state.status === 'playing' && !threshold.isOpen());
 }
 
 function showFloor(withBanner) {
@@ -365,10 +396,6 @@ function openThreshold() {
 $('btn-open-threshold').addEventListener('click', openThreshold);
 $('btn-death-threshold').addEventListener('click', openThreshold);
 $('btn-victory-threshold').addEventListener('click', openThreshold);
-$('btn-abandon').addEventListener('click', () => {
-  endOfRun();
-  openThreshold();
-});
 
 function restart(newSeed) {
   seed = newSeed;
@@ -473,6 +500,7 @@ function frame(timestamp) {
   playerView.setClass(p.cls);
   setAttackLabel(p.cls);
   updateSpecial();
+  updatePauseButton();
   playerView.update(x, z, facing, Math.hypot(p.vx, p.vz), time, {
     blink: p.invuln > 0 && p.dashTimer === 0 && state.status === 'playing',
     dashing: p.dashTimer > 0,

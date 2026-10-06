@@ -63,6 +63,20 @@
         <button id="btn-special" class="touch-btn" type="button">Spécial</button>
       </div>
 
+      <!-- Bouton pause (PC et mobile), visible pendant la partie -->
+      <button id="btn-pause" type="button" aria-label="Pause" hidden><span></span><span></span></button>
+
+      <!-- Menu de pause -->
+      <div id="pause-screen" class="hidden">
+        <h2>Pause</h2>
+        <p id="pause-info"></p>
+        <div class="buttons">
+          <button id="btn-resume" type="button">Reprendre</button>
+          <button id="btn-pause-abandon" type="button">Abandonner la descente</button>
+        </div>
+        <p id="pause-help"></p>
+      </div>
+
       <!-- Écran de Charon : choix d'un bienfait entre deux étages -->
       <div id="charon" class="hidden">
         <h2 id="charon-title">Charon, le passeur</h2>
@@ -148,7 +162,6 @@
         <p id="start-seed"></p>
         <div class="buttons">
           <button id="btn-open-threshold" type="button">Le Seuil</button>
-          <button id="btn-abandon" type="button" hidden>Abandonner la descente</button>
         </div>
       </div>
     </div>

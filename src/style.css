@@ -540,6 +540,93 @@ body {
   background: rgba(241, 230, 208, 0.5);
 }
 
+/* ---------- Bouton pause (en partie) ---------- */
+#btn-pause {
+  position: absolute;
+  top: calc(30px + env(safe-area-inset-top));
+  left: calc(10px + env(safe-area-inset-left));
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(242, 201, 107, 0.6);
+  background: rgba(5, 8, 10, 0.5);
+  cursor: pointer;
+  touch-action: none;
+}
+
+#btn-pause[hidden] {
+  display: none;
+}
+
+/* Les deux barres verticales du symbole pause */
+#btn-pause span {
+  width: 5px;
+  height: 16px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+/* ---------- Menu de pause ---------- */
+#pause-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+  text-align: center;
+  background: var(--voile);
+}
+
+#pause-screen.hidden {
+  display: none;
+}
+
+#pause-screen h2 {
+  margin: 0;
+  font-size: clamp(32px, 9vw, 52px);
+  letter-spacing: 6px;
+  color: var(--accent);
+}
+
+#pause-screen p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+#pause-screen .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+#pause-screen button {
+  font: 600 15px var(--antique);
+  padding: 12px 20px;
+  color: var(--accent);
+  background: transparent;
+  border: 2px solid #8a6a2c;
+  cursor: pointer;
+}
+
+#btn-resume {
+  color: var(--fond) !important;
+  background: var(--accent) !important;
+}
+
+#pause-help {
+  opacity: 0.7;
+  max-width: 520px;
+}
+
 /* ---------- Écran titre / pause ---------- */
 #start-screen {
   position: absolute;
