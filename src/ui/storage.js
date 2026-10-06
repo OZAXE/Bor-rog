@@ -23,3 +23,32 @@ export function saveProfile(profile) {
     return false;
   }
 }
+
+// ---------- Descente en cours (reprise après fermeture de la page) ----------
+
+const RUN_KEY = 'bor-rog.partie';
+
+export function saveRun(text) {
+  try {
+    window.localStorage.setItem(RUN_KEY, text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function loadRunText() {
+  try {
+    return window.localStorage.getItem(RUN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function clearRun() {
+  try {
+    window.localStorage.removeItem(RUN_KEY);
+  } catch {
+    /* stockage indisponible : rien à effacer */
+  }
+}

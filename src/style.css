@@ -817,6 +817,21 @@ body {
   display: none;
 }
 
+/* Descente sauvegardée : bouton principal plein, l'autre en contour */
+#resume-run[hidden] {
+  display: none;
+}
+
+#resume-run .buttons {
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+#start-screen #btn-resume-run {
+  color: var(--fond);
+  background: var(--ombre);
+}
+
 /* ---------- Le Seuil : arbre des améliorations permanentes ---------- */
 #threshold {
   position: absolute;

@@ -24,7 +24,9 @@ import { ZONE_THEMES } from './render/zoneThemes.js';
 import { zoneOf, FLOORS_PER_ZONE } from './dungeon/zones.js';
 import { createInput } from './controls/input.js';
 import { recordRun, metaOf, shadowsEarned } from './meta/profile.js';
-import { loadProfile, saveProfile } from './ui/storage.js';
+import { loadProfile, saveProfile, saveRun, loadRunText, clearRun } from './ui/storage.js';
+import { serializeRun, parseRun, runSummary } from './state/savegame.js';
+import { CLASSES } from './systems/classes.js';
 import { createThreshold } from './ui/threshold.js';
 
 // ---------------------------------------------------------------------------
@@ -160,6 +162,7 @@ startText.innerHTML = DEVICE.isMobile
 
 startScreen.addEventListener('click', (e) => {
   if (e.target.closest('button')) return; // bouton du Seuil
+  if (savedRun) return; // une descente sauvegardée attend : choisir avec les boutons
   if (DEVICE.isMobile) enterFullscreen();
   setPlaying(true);
 });
@@ -170,6 +173,7 @@ window.addEventListener('keydown', (e) => {
 // Quitter l'onglet met le jeu en pause
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && state.status === 'playing' && !threshold.isOpen()) setPlaying(false);
+  if (document.hidden) autosave();
 });
 
 function setPlaying(value) {
@@ -177,7 +181,10 @@ function setPlaying(value) {
   // Avant la première partie : écran titre ; ensuite : menu de pause
   startScreen.classList.toggle('hidden', value || started);
   pauseScreen.classList.toggle('hidden', value || !started);
-  if (!value && started) showPauseInfo();
+  if (!value && started) {
+    showPauseInfo();
+    autosave();
+  }
   // Le bandeau "Étage 1" n'apparaît qu'au vrai début de la partie
   // (sinon il s'anime derrière l'écran titre et chevauche le titre)
   if (value && !started) {
@@ -374,6 +381,7 @@ let lastEarned = 0;
 function endOfRun() {
   if (recorded) return;
   recorded = true;
+  clearRun(); // la descente est finie : plus rien à reprendre
   lastEarned = recordRun(profile.current, state);
   saveProfile(profile.current);
 }
@@ -398,8 +406,15 @@ $('btn-death-threshold').addEventListener('click', openThreshold);
 $('btn-victory-threshold').addEventListener('click', openThreshold);
 
 function restart(newSeed) {
-  seed = newSeed;
-  state = newState(seed);
+  abandonSavedRun();
+  clearRun();
+  adoptState(newState(newSeed));
+}
+
+// Installe un état de partie (nouvelle descente ou descente reprise) et remet l'affichage à zéro
+function adoptState(next) {
+  seed = next.seed;
+  state = next;
   recorded = false;
   lastEarned = 0;
   window.__game.state = state;
@@ -420,6 +435,47 @@ function restart(newSeed) {
 $('btn-retry').addEventListener('click', () => restart(seed));
 $('btn-victory-new').addEventListener('click', () => restart(randomSeed()));
 $('btn-new').addEventListener('click', () => restart(randomSeed()));
+
+// ---- Reprise d'une descente (étape 8a) ----
+// La partie est sauvegardée en continu ; à l'ouverture de la page, l'écran titre
+// propose de la reprendre. En commencer une autre compte comme un abandon (les
+// Ombres de la descente interrompue sont encaissées, rien n'est perdu).
+let savedRun = parseRun(loadRunText());
+let autosaveTimer = 0;
+function autosave() {
+  // Rien à sauvegarder avant la première partie ni après sa fin (mort, victoire, abandon)
+  if (!started || recorded || (state.status !== 'playing' && state.status !== 'choosing')) return;
+  saveRun(serializeRun(state));
+}
+function abandonSavedRun() {
+  if (!savedRun) return;
+  recordRun(profile.current, savedRun);
+  saveProfile(profile.current);
+  savedRun = null;
+  $('resume-run').hidden = true;
+}
+if (savedRun) {
+  const r = runSummary(savedRun);
+  $('resume-text').textContent = `Descente en cours : étage ${r.floor} · ${CLASSES[r.cls].name} · ${r.hp} / ${r.maxHp} PV`;
+  $('resume-run').hidden = false;
+  startText.innerHTML = '';
+  $('start-seed').hidden = true; // graine de la partie neuve : sans objet tant que le choix n'est pas fait
+}
+$('btn-resume-run').addEventListener('click', () => {
+  const run = savedRun;
+  savedRun = null;
+  $('resume-run').hidden = true;
+  if (DEVICE.isMobile) enterFullscreen();
+  adoptState(run);
+  setPlaying(true);
+});
+$('btn-new-run').addEventListener('click', () => {
+  if (DEVICE.isMobile) enterFullscreen();
+  restart(randomSeed());
+  setPlaying(true);
+});
+// Fermer ou quitter la page : dernière sauvegarde
+window.addEventListener('pagehide', autosave);
 
 function rebuildFloor() {
   dungeonView.dispose();
@@ -483,6 +539,11 @@ function frame(timestamp) {
   const time = timer.getElapsed();
 
   const alpha = playing && state.status !== 'dead' ? loop.advance(dt, tick) : 1;
+  // Sauvegarde automatique de la descente toutes les 3 secondes de jeu
+  if (playing && (autosaveTimer += dt) > 3) {
+    autosaveTimer = 0;
+    autosave();
+  }
 
   // Changement d'étage : on reconstruit le décor et on n'interpole pas (téléportation)
   if (state.floorIndex !== viewFloor) {
