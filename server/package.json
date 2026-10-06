@@ -1,0 +1,16 @@
+{
+  "name": "bor-rog-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Serveur de Bor-rog : comptes, sauvegarde en ligne et multijoueur (hébergé sur Render)",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}
