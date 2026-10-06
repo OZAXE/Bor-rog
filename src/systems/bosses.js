@@ -14,14 +14,13 @@ import { SIM, ticks } from './simConfig.js';
 import { nextInt, nextFloat } from '../core/rng.js';
 import { addHazard } from './hazards.js';
 import { facingOf, inArc } from './geometry.js';
-import { hurtPlayer } from './player.js';
+import { hurtPlayersWhere } from './player.js';
 import { approachDir } from './enemies.js';
-import { createEnemy } from '../state/gameState.js';
+import { createEnemy, isActive } from '../state/gameState.js';
 import { isWalkable, tileAt } from '../dungeon/tiles.js';
 
 export function cerberusBrain(state, e, cfg, dx, dz, dist, ctx) {
   const b = SIM.bosses.cerberus;
-  const p = state.player;
   const still = { mvx: 0, mvz: 0 };
   switch (e.mode) {
     case 'chase': {
@@ -53,7 +52,7 @@ export function cerberusBrain(state, e, cfg, dx, dz, dist, ctx) {
       return release(state, e, b);
     }
     case 'charge': {
-      if (--e.timer <= 0) return endCharge(state, e, b, b.charge.recover);
+      if (--e.timer <= 0) return endCharge(state, e, b, b.charge.recover, ctx.target);
       return { mvx: e.aimX * b.charge.speed, mvz: e.aimZ * b.charge.speed };
     }
     case 'recover':
@@ -84,7 +83,6 @@ export function cerberusBrain(state, e, cfg, dx, dz, dist, ctx) {
   }
 
   function release(st, en, cfgB) {
-    const pl = st.player;
     switch (en.attack) {
       case 'charge':
         en.mode = 'charge';
@@ -95,15 +93,14 @@ export function cerberusBrain(state, e, cfg, dx, dz, dist, ctx) {
       case 'breath': {
         st.events.push({ type: 'breath', id: en.id, x: en.x, z: en.z, facing: en.facing });
         const br = cfgB.breath;
-        const hit = br.angles.some((a) => inArc(en.x, en.z, en.facing + a, br.range, br.coneArc, pl.x, pl.z, SIM.player.radius));
-        if (hit) hurtPlayer(st, br.damage, en.x, en.z);
+        const inCone = (pl) => br.angles.some((a) => inArc(en.x, en.z, en.facing + a, br.range, br.coneArc, pl.x, pl.z, SIM.player.radius));
+        hurtPlayersWhere(st, inCone, br.damage, en.x, en.z);
         return toRecover(en, br.recover);
       }
       case 'bite': {
         st.events.push({ type: 'strike', id: en.id, x: en.x, z: en.z, facing: en.facing });
-        if (inArc(en.x, en.z, en.facing, cfgB.bite.range, cfgB.bite.arc, pl.x, pl.z, SIM.player.radius)) {
-          hurtPlayer(st, cfgB.bite.damage, en.x, en.z);
-        }
+        const bitten = (pl) => inArc(en.x, en.z, en.facing, cfgB.bite.range, cfgB.bite.arc, pl.x, pl.z, SIM.player.radius);
+        hurtPlayersWhere(st, bitten, cfgB.bite.damage, en.x, en.z);
         return toRecover(en, cfgB.bite.recover);
       }
       case 'howl':
@@ -122,11 +119,10 @@ export function cerberusBrain(state, e, cfg, dx, dz, dist, ctx) {
   }
 }
 
-// Fin de charge : enchaîne une seconde charge en phase 2, sinon temps mort
-function endCharge(state, e, b, recoverSeconds) {
+// Fin de charge : enchaîne une seconde charge en phase 2 (vers la cible p), sinon temps mort
+function endCharge(state, e, b, recoverSeconds, p) {
   if (e.chainLeft > 0) {
     e.chainLeft--;
-    const p = state.player;
     const dx = p.x - e.x;
     const dz = p.z - e.z;
     const d = Math.hypot(dx, dz) || 1;
@@ -148,9 +144,9 @@ function endCharge(state, e, b, recoverSeconds) {
 // Après le déplacement d'un pas : contact pendant la charge, et choc contre un obstacle
 export function resolveBossCharge(state, e, moved, wanted) {
   const b = SIM.bosses[e.type];
-  const p = state.player;
-  if (!e.chargeHit && Math.hypot(p.x - e.x, p.z - e.z) < b.radius + SIM.player.radius + 0.1) {
-    if (hurtPlayer(state, b.charge.damage, e.x, e.z)) e.chargeHit = true;
+  if (!e.chargeHit) {
+    const near = (p) => Math.hypot(p.x - e.x, p.z - e.z) < b.radius + SIM.player.radius + 0.1;
+    if (hurtPlayersWhere(state, near, b.charge.damage, e.x, e.z)) e.chargeHit = true;
   }
   if (wanted > 0 && moved < wanted * 0.5) {
     // Contre un mur ou une colonne : sonné, la grande fenêtre pour frapper
@@ -160,6 +156,15 @@ export function resolveBossCharge(state, e, moved, wanted) {
     e.stunned = true;
     state.events.push({ type: 'crash', id: e.id, x: e.x, z: e.z });
   }
+}
+
+// Attaques à distance (flaques, pluie) : en co-op, chaque héros debout à son tour.
+// En solo, toujours la cible (aucun tirage en plus : la partie ne change pas).
+function takeTurns(state, e, target) {
+  const up = state.players.filter(isActive);
+  if (up.length < 2) return target;
+  e.turn = ((e.turn || 0) + 1) % up.length;
+  return up[e.turn];
 }
 
 function pauseTicks(state, b) {
@@ -191,9 +196,9 @@ function summonShades(state, e, count) {
 // phase 2, fait jaillir des flaques de lave annoncées autour du héros.
 // ===========================================================================
 
-export function hydraBrain(state, e) {
+export function hydraBrain(state, e, cfg, dx, dz, dist, ctx) {
   const b = SIM.bosses.hydra;
-  const p = state.player;
+  const p = ctx.target;
   e.facing = facingOf(p.x - e.x, p.z - e.z);
   const still = { mvx: 0, mvz: 0 };
 
@@ -253,10 +258,12 @@ export function hydraBrain(state, e) {
     e.poolTimer = nextInt(state.rng, ticks(ph.poolEvery[0]), ticks(ph.poolEvery[1]));
     const a = nextFloat(state.rng) * Math.PI * 2;
     const r = nextFloat(state.rng) * 1.2;
+    // Co-op : les flaques visent tour à tour chaque héros debout
+    const victim = takeTurns(state, e, p);
     addHazard(state, {
       kind: 'lava',
-      x: p.x + Math.cos(a) * r,
-      z: p.z + Math.sin(a) * r,
+      x: victim.x + Math.cos(a) * r,
+      z: victim.z + Math.sin(a) * r,
       r: ph.poolRadius,
       warn: ticks(ph.poolWarn),
       life: ticks(ph.poolLife),
@@ -303,9 +310,7 @@ export function hydraHeadBrain(state, e, cfg, dx, dz, dist) {
       const aim = Math.atan2(e.aimX, e.aimZ);
       if (e.attack === 'bite') {
         state.events.push({ type: 'strike', id: e.id, x: e.x, z: e.z, facing: aim });
-        if (inArc(e.x, e.z, aim, b.bite.range, b.bite.arc, state.player.x, state.player.z, SIM.player.radius)) {
-          hurtPlayer(state, b.bite.damage, e.x, e.z);
-        }
+        hurtPlayersWhere(state, (p) => inArc(e.x, e.z, aim, b.bite.range, b.bite.arc, p.x, p.z, SIM.player.radius), b.bite.damage, e.x, e.z);
       } else {
         const sp = b.spit;
         for (let k = 0; k < sp.count; k++) {
@@ -340,7 +345,7 @@ export function hydraHeadBrain(state, e, cfg, dx, dz, dist) {
 
 export function thanatosBrain(state, e, cfg, dx, dz, dist, ctx) {
   const b = SIM.bosses.thanatos;
-  const p = state.player;
+  const p = ctx.target;
   const still = { mvx: 0, mvz: 0 };
   // Phase 3 : plus rapide, préparations plus courtes
   const fast = e.phase3 ? b.phase3 : { speed: 1, windup: 1 };
@@ -417,14 +422,14 @@ export function thanatosBrain(state, e, cfg, dx, dz, dist, ctx) {
   function release() {
     if (e.attack === 'reap') {
       state.events.push({ type: 'reap', id: e.id, x: e.x, z: e.z, r: b.reap.radius });
-      if (Math.hypot(p.x - e.x, p.z - e.z) < b.reap.radius + SIM.player.radius) hurtPlayer(state, b.reap.damage, e.x, e.z);
+      const reaped = (pl) => Math.hypot(pl.x - e.x, pl.z - e.z) < b.reap.radius + SIM.player.radius;
+      hurtPlayersWhere(state, reaped, b.reap.damage, e.x, e.z);
       return recover(b.reap.recover);
     }
     // 'slash' (après la téléportation)
     state.events.push({ type: 'strike', id: e.id, x: e.x, z: e.z, facing: e.facing });
-    if (inArc(e.x, e.z, e.facing, b.blink.slashRange, b.blink.slashArc, p.x, p.z, SIM.player.radius)) {
-      hurtPlayer(state, b.blink.damage, e.x, e.z);
-    }
+    const slashed = (pl) => inArc(e.x, e.z, e.facing, b.blink.slashRange, b.blink.slashArc, pl.x, pl.z, SIM.player.radius);
+    hurtPlayersWhere(state, slashed, b.blink.damage, e.x, e.z);
     return recover(b.blink.recover);
   }
 
@@ -437,10 +442,12 @@ export function thanatosBrain(state, e, cfg, dx, dz, dist, ctx) {
   // Pluie d'âmes : des cercles annoncés autour du héros (le premier pile sur lui)
   function castRain() {
     const r = b.rain;
+    // Co-op : la pluie tombe tour à tour sur chaque héros debout
+    const victim = takeTurns(state, e, p);
     for (let k = 0; k < r.count; k++) {
       const a = nextFloat(state.rng) * Math.PI * 2;
       const d = k === 0 ? 0 : 1 + nextFloat(state.rng) * (r.spread - 1);
-      addHazard(state, { kind: 'soul', x: p.x + Math.cos(a) * d, z: p.z + Math.sin(a) * d, r: r.radius, warn: windup(r.warn), damage: r.damage });
+      addHazard(state, { kind: 'soul', x: victim.x + Math.cos(a) * d, z: victim.z + Math.sin(a) * d, r: r.radius, warn: windup(r.warn), damage: r.damage });
     }
     state.events.push({ type: 'rain', id: e.id, x: e.x, z: e.z });
     e.attack = 'rain';
@@ -475,7 +482,6 @@ export function thanatosBrain(state, e, cfg, dx, dz, dist, ctx) {
 // Il s'évanouit au premier coup reçu (cf. player.js).
 export function thanatosDoubleBrain(state, e, cfg, dx, dz, dist, ctx) {
   const b = SIM.bosses.thanatos;
-  const p = state.player;
   const still = { mvx: 0, mvz: 0 };
   e.facing = facingOf(dx, dz);
   switch (e.mode) {
@@ -499,7 +505,7 @@ export function thanatosDoubleBrain(state, e, cfg, dx, dz, dist, ctx) {
     case 'windup':
       if (--e.timer > 0) return still;
       state.events.push({ type: 'reap', id: e.id, x: e.x, z: e.z, r: b.reap.radius });
-      if (Math.hypot(p.x - e.x, p.z - e.z) < b.reap.radius + SIM.player.radius) hurtPlayer(state, b.reap.damage - 1, e.x, e.z);
+      hurtPlayersWhere(state, (p) => Math.hypot(p.x - e.x, p.z - e.z) < b.reap.radius + SIM.player.radius, b.reap.damage - 1, e.x, e.z);
       e.mode = 'chase';
       e.timer = nextInt(state.rng, ticks(1.2), ticks(2.2));
       return still;

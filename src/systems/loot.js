@@ -6,9 +6,11 @@ import { SIM } from './simConfig.js';
 import { nextInt, nextFloat, chance } from '../core/rng.js';
 import { isWalkable, tileAt } from '../dungeon/tiles.js';
 import { metaValue } from '../meta/tree.js';
+import { isActive } from '../state/gameState.js';
 
 // Œil du passeur (talent) : plus d'oboles dans les coffres et les récompenses de salle
-const withEye = (state, n) => Math.round(n * (1 + metaValue(state.player.meta, 'eye')));
+// (en co-op, le meilleur Œil des héros compte)
+const withEye = (state, n) => Math.round(n * (1 + Math.max(...state.players.map((p) => metaValue(p.meta, 'eye')))));
 
 const L = () => SIM.loot;
 
@@ -52,11 +54,11 @@ export function dropRoomReward(state, room) {
 
 // Ramassage (et attraction des oboles), ouverture des coffres
 export function updateLoot(state, dt) {
-  const p = state.player;
   const l = L();
+  const up = state.players.filter(isActive);
 
   for (const chest of state.chests) {
-    if (chest.opened || Math.hypot(chest.x - p.x, chest.z - p.z) > 0.9) continue;
+    if (chest.opened || !up.some((p) => Math.hypot(chest.x - p.x, chest.z - p.z) <= 0.9)) continue;
     chest.opened = true;
     spawnObols(state, chest.x, chest.z, withEye(state, nextInt(state.rng, ...l.chestObols)));
     if (chance(state.rng, l.chestPotionChance)) spawnPickup(state, 'potion', chest.x, chest.z);
@@ -64,16 +66,26 @@ export function updateLoot(state, dt) {
   }
 
   state.pickups = state.pickups.filter((it) => {
+    // Le héros debout le plus proche (une potion ne va qu'à un héros blessé)
+    let p = null;
+    let d = Infinity;
+    for (const h of up) {
+      if (it.kind === 'potion' && h.hp >= h.maxHp) continue;
+      const dh = Math.hypot(h.x - it.x, h.z - it.z);
+      if (dh < d) {
+        d = dh;
+        p = h;
+      }
+    }
+    // Une potion n'est pas gaspillée si les héros ont déjà toute leur vie
+    if (!p) return true;
     const dx = p.x - it.x;
     const dz = p.z - it.z;
-    const d = Math.hypot(dx, dz);
-    // Une potion n'est pas gaspillée si le héros a déjà toute sa vie
-    if (it.kind === 'potion' && p.hp >= p.maxHp) return true;
     if (d <= l.pickupRadius) {
-      if (it.kind === 'obol') state.gold += it.amount;
+      if (it.kind === 'obol') p.gold += it.amount;
       // Élixir (talent) : potions plus efficaces
       else p.hp = Math.min(p.maxHp, p.hp + Math.round(l.potionHeal * (1 + metaValue(p.meta, 'elixir'))));
-      state.events.push({ type: 'pickup', kind: it.kind, amount: it.amount, x: it.x, z: it.z });
+      state.events.push({ type: 'pickup', kind: it.kind, amount: it.amount, x: it.x, z: it.z, player: p.id });
       return false;
     }
     // Les oboles filent vers le héros quand il passe à proximité

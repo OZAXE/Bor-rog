@@ -10,12 +10,12 @@ import { isSolid, tileAt } from '../dungeon/tiles.js';
 import { hurtPlayer, damageEnemy, removeDeadEnemies } from './player.js';
 import { playerStats } from './boons.js';
 import { nextFloat } from '../core/rng.js';
+import { isActive } from '../state/gameState.js';
 
 export function updateProjectiles(state, dt) {
-  const p = state.player;
   const hitDist = SIM.player.radius + 0.08;
-  const reflect = playerStats(p).reflect;
-  let enemyHit = false;
+  // Héros qui a touché un ennemi en dernier (crédité des victimes)
+  let enemyHit = null;
   state.projectiles = state.projectiles.filter((a) => {
     const ally = a.friendly || a.reflected;
     // Petits pas pour ne traverser ni un mur ni une cible entre deux images
@@ -29,7 +29,7 @@ export function updateProjectiles(state, dt) {
           // L'orbe explose contre le mur, un peu en retrait pour toucher ceux qui s'y collent
           a.x -= (a.vx * dt) / steps;
           a.z -= (a.vz * dt) / steps;
-          enemyHit = explode(state, a) || enemyHit;
+          if (explode(state, a)) enemyHit = ownerOf(state, a);
         } else state.events.push({ type: 'arrowBreak', x: a.x, z: a.z, ally });
         return false;
       }
@@ -43,20 +43,22 @@ export function updateProjectiles(state, dt) {
             Math.hypot(a.x - en.x, a.z - en.z) < SIM.enemies[en.type].radius + (a.radius || 0.1),
         );
         if (!e) continue;
-        enemyHit = true;
+        const owner = ownerOf(state, a);
+        enemyHit = owner;
         if (a.blast) {
           explode(state, a);
           return false;
         }
         const len = Math.hypot(a.vx, a.vz) || 1;
-        const st = playerStats(p);
+        const st = playerStats(owner);
         let dmg = a.damage ?? st.damage;
         // Tir précis (Chasseresse) : bonus sur une cible touchée à plus de 5 m du tireur
         if (a.kind === 'heroArrow' && st.marksman && Math.hypot(e.x - a.ox, e.z - a.oz) > 5) dmg *= 1 + st.marksman;
-        if (damageEnemy(state, e, dmg, { x: a.vx / len, z: a.vz / len }) && a.kind === 'heroArrow' && st.poisonDps) {
+        if (damageEnemy(state, e, dmg, { x: a.vx / len, z: a.vz / len }, owner) && a.kind === 'heroArrow' && st.poisonDps) {
           // Flèches empoisonnées : le poison se renouvelle à chaque flèche
           e.poison = ticks(st.poisonTime);
           e.poisonDps = st.poisonDps;
+          e.poisonBy = owner.id;
         }
         // Flèche perforante (Fendoir) : continue sa course
         if (a.pierce > 0) {
@@ -66,12 +68,15 @@ export function updateProjectiles(state, dt) {
         }
         return false;
       }
-      if (Math.hypot(a.x - p.x, a.z - p.z) < hitDist) {
+      // Projectile ennemi : touche le premier héros debout sur sa route
+      const p = state.players.find((h) => isActive(h) && Math.hypot(a.x - h.x, a.z - h.z) < hitDist);
+      if (p) {
         // Esquive en cours + Bouclier du vent : le projectile repart vers l'ennemi
-        if (reflect && p.dashTimer > 0) {
+        if (playerStats(p).reflect && p.dashTimer > 0) {
           a.vx = -a.vx;
           a.vz = -a.vz;
           a.reflected = true;
+          a.owner = p.id;
           a.damage = playerStats(p).damage;
           a.travelLeft = Math.max(a.travelLeft, 8);
           state.events.push({ type: 'reflect', x: a.x, z: a.z });
@@ -79,7 +84,7 @@ export function updateProjectiles(state, dt) {
         }
         // Pendant l'esquive (invulnérable), le projectile passe à travers le héros
         if (p.invuln === 0) {
-          hurtPlayer(state, a.damage, a.x - a.vx, a.z - a.vz);
+          hurtPlayer(state, p, a.damage, a.x - a.vx, a.z - a.vz);
           return false;
         }
       }
@@ -87,18 +92,24 @@ export function updateProjectiles(state, dt) {
     a.travelLeft -= total;
     if (a.travelLeft > 0) return true;
     // En bout de course, l'orbe explose quand même
-    if (a.blast) enemyHit = explode(state, a) || enemyHit;
+    if (a.blast && explode(state, a)) enemyHit = ownerOf(state, a);
     return false;
   });
   // Après le tri (un boss vaincu vide la liste des projectiles)
-  if (enemyHit) removeDeadEnemies(state);
+  if (enemyHit) removeDeadEnemies(state, enemyHit);
+}
+
+// Héros à l'origine d'un projectile allié (tireur, ou héros qui l'a renvoyé)
+function ownerOf(state, a) {
+  return state.players[a.owner] || state.players[0];
 }
 
 // Explosion d'un orbe : blesse tous les ennemis dans le rayon. Renvoie true si quelqu'un est touché.
 // depth : génération de la réaction en chaîne (limitée pour rester raisonnable)
 function explode(state, a, depth = 0) {
   state.events.push({ type: 'orbBurst', x: a.x, z: a.z, r: a.blast, chain: depth > 0 });
-  const st = playerStats(state.player);
+  const owner = ownerOf(state, a);
+  const st = playerStats(owner);
   let any = false;
   const killed = [];
   for (const e of state.enemies) {
@@ -109,7 +120,7 @@ function explode(state, a, depth = 0) {
     if (d > a.blast + SIM.enemies[e.type].radius) continue;
     // Recul vers l'extérieur de l'explosion
     const dir = d > 1e-6 ? { x: dx / d, z: dz / d } : { x: 0, z: 1 };
-    if (!damageEnemy(state, e, a.damage, dir)) continue;
+    if (!damageEnemy(state, e, a.damage, dir, owner)) continue;
     any = true;
     // Torrent d'âmes (Mystique) : l'explosion ralentit (pas les boss)
     if (st.blastSlow && !e.boss && !e.part) e.slow = Math.max(e.slow || 0, ticks(st.blastSlow));
@@ -119,7 +130,7 @@ function explode(state, a, depth = 0) {
   // Le tirage n'a lieu qu'avec le talent (sinon la partie ne change pas).
   if (st.chain && depth < 3) {
     for (const e of killed) {
-      if (nextFloat(state.rng) < st.chain) explode(state, { x: e.x, z: e.z, blast: a.blast, damage: a.damage }, depth + 1);
+      if (nextFloat(state.rng) < st.chain) explode(state, { x: e.x, z: e.z, blast: a.blast, damage: a.damage, owner: owner.id }, depth + 1);
     }
   }
   return any;

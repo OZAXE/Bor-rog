@@ -12,6 +12,7 @@ import { TILE, isWalkable, tileAt } from '../dungeon/tiles.js';
 import { pushOut } from './collision.js';
 import { SIM } from './simConfig.js';
 import { dropRoomReward } from './loot.js';
+import { isActive } from '../state/gameState.js';
 
 export function updateRooms(state) {
   if (state.lock) {
@@ -21,8 +22,19 @@ export function updateRooms(state) {
     return;
   }
 
-  const room = roomAround(state.dungeon, state.player.x, state.player.z);
-  if (!room || room.cleared || (room.type !== 'combat' && room.type !== 'stairs' && room.type !== 'boss')) return;
+  // Le premier héros debout qui entre dans une salle de combat la déclenche
+  let room = null;
+  let hero = null;
+  for (const p of state.players) {
+    if (!isActive(p)) continue;
+    const r = roomAround(state.dungeon, p.x, p.z);
+    if (r && !r.cleared && (r.type === 'combat' || r.type === 'stairs' || r.type === 'boss')) {
+      room = r;
+      hero = p;
+      break;
+    }
+  }
+  if (!room) return;
 
   const inside = state.enemies.filter((e) => inRoom(room, e.x, e.z));
   if (inside.length === 0) {
@@ -39,6 +51,18 @@ export function updateRooms(state) {
     const out = outward(room, d);
     e.x = d.c + 0.5 + out.dc;
     e.z = d.r + 0.5 + out.dr;
+  }
+  // Co-op : les héros restés dehors (même à terre) rejoignent celui qui est entré,
+  // sinon ils resteraient bloqués derrière les grilles pendant tout le combat
+  for (const p of state.players) {
+    if (p === hero || inRoom(room, p.x, p.z)) continue;
+    const spot = besideHero(state.dungeon, hero);
+    p.x = spot.x;
+    p.z = spot.z;
+    p.vx = 0;
+    p.vz = 0;
+    p.dashTimer = 0;
+    state.events.push({ type: 'teleport', x: p.x, z: p.z, player: p.id });
   }
   for (const d of doors) state.dungeon.tiles[d.r * state.dungeon.width + d.c] = TILE.GATE;
   // Les ennemis qui frôlent une grille en sont dégagés tout de suite (vers leur côté)
@@ -82,6 +106,16 @@ export function roomAround(dungeon, x, z) {
     }
   }
   return null;
+}
+
+// Une case libre juste à côté du héros (à défaut, sa propre position)
+function besideHero(dungeon, hero) {
+  for (const [dx, dz] of [[-0.8, 0], [0.8, 0], [0, -0.8], [0, 0.8]]) {
+    const x = hero.x + dx;
+    const z = hero.z + dz;
+    if (isWalkable(tileAt(dungeon, Math.floor(x), Math.floor(z)))) return { x, z };
+  }
+  return { x: hero.x, z: hero.z };
 }
 
 // Direction "vers l'extérieur de la salle" depuis un passage

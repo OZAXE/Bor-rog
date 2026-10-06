@@ -42,7 +42,7 @@ test('intentions invalides (réseau, bug de contrôle) nettoyées sans planter',
   for (const bad of [null, undefined, {}, { moveX: NaN, moveY: Infinity }, { moveX: '1' }]) {
     stepGame(state, bad);
   }
-  assert.ok(Number.isFinite(state.player.x) && Number.isFinite(state.player.z));
+  assert.ok(Number.isFinite(state.players[0].x) && Number.isFinite(state.players[0].z));
   // La diagonale n'est pas plus rapide que la ligne droite
   const i = sanitizeIntent({ moveX: 1, moveY: 1 });
   assert.ok(Math.abs(Math.hypot(i.moveX, i.moveY) - 1) < 1e-12);
@@ -52,10 +52,10 @@ test('vitesse de marche respectée et arrêt net quand on lâche', () => {
   const state = createGameState('vitesse');
   // Une demi-seconde vers la droite (on peut toucher un mur : on vérifie juste le plafond)
   for (let i = 0; i < 30; i++) stepGame(state, { moveX: 1, moveY: 0 });
-  assert.ok(Math.hypot(state.player.vx, state.player.vz) <= SIM.player.speed + 1e-9);
+  assert.ok(Math.hypot(state.players[0].vx, state.players[0].vz) <= SIM.player.speed + 1e-9);
   // 0,15 s sans intention : arrêt complet
   for (let i = 0; i < 9; i++) stepGame(state, {});
-  assert.equal(Math.hypot(state.player.vx, state.player.vz), 0);
+  assert.equal(Math.hypot(state.players[0].vx, state.players[0].vz), 0);
 });
 
 test("un bot va du départ à l'escalier et descend, sur 25 graines", () => {
@@ -66,14 +66,14 @@ test("un bot va du départ à l'escalier et descend, sur 25 graines", () => {
     let t = 0;
     while (state.floorIndex === 0 && t < maxTicks) {
       // Sur l'escalier, l'écran de Charon s'ouvre : on prend le premier bienfait
-      stepGame(state, state.status === 'choosing' ? { choice: 0 } : bot(state.player));
-      assert.ok(!overlapsSolid(state.dungeon, state.player, SIM.player.radius), `bot-${s} dans un mur`);
+      stepGame(state, state.status === 'choosing' ? { choice: 0 } : bot(state.players[0]));
+      assert.ok(!overlapsSolid(state.dungeon, state.players[0], SIM.player.radius), `bot-${s} dans un mur`);
       t++;
     }
     assert.equal(state.floorIndex, 1, `bot-${s} : escalier non atteint en ${t} pas`);
     // Nouvel étage : joueur replacé au départ
     const st = state.dungeon.start;
-    assert.equal(state.player.x, st.c + 0.5);
-    assert.equal(state.player.z, st.r + 0.5);
+    assert.equal(state.players[0].x, st.c + 0.5);
+    assert.equal(state.players[0].z, st.r + 0.5);
   }
 });

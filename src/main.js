@@ -11,6 +11,7 @@ import { EMPTY_INTENT } from './systems/intent.js';
 import { createDungeonView, createDungeonResources } from './render/dungeonView.js';
 import { createAtlasTexture, createHaloTexture, createToonGradient } from './render/textures.js';
 import { createPlayerView } from './render/playerView.js';
+import { createAllyBot } from './controls/allyBot.js';
 import { createEnemyViews, createProjectileView } from './render/enemyViews.js';
 import { createEffects } from './render/effects.js';
 import { createGateView } from './render/gateView.js';
@@ -52,7 +53,20 @@ let seed = params.get('seed') || randomSeed();
 // Objet conteneur : l'écran du Seuil et la boucle partagent le même profil
 const profile = { current: loadProfile() };
 // Chaque partie démarre avec les améliorations permanentes achetées au Seuil
-const newState = (s) => createGameState(s, { meta: metaOf(profile.current), cls: profile.current.cls });
+// Co-op de test (étape 8c) : ?coop=bot ajoute un partenaire contrôlé par l'ordinateur.
+// Il prend une autre classe que la tienne, avec tes attributs et ton build rangé de cette classe.
+const COOP_BOT = params.get('coop') === 'bot';
+function botPlayer() {
+  const cls = profile.current.cls === 'huntress' ? 'warrior' : 'huntress';
+  return { meta: { attrs: profile.current.attrs, talents: profile.current.builds[cls] || {} }, cls };
+}
+const newState = (s) => {
+  const me = { meta: metaOf(profile.current), cls: profile.current.cls };
+  return createGameState(s, COOP_BOT ? { players: [me, botPlayer()] } : me);
+};
+// Le joueur de cet écran (toujours le premier en local)
+const me = () => state.players[0];
+let allyBot = createAllyBot(1);
 
 // ---- État ----
 let state = newState(seed);
@@ -117,6 +131,8 @@ const makeDungeonView = () => {
 let dungeonView = makeDungeonView();
 let viewFloor = state.floorIndex;
 const playerView = createPlayerView(scene, textures.toon);
+// Co-op : le second héros, avec un anneau vert au sol pour le reconnaître
+const allyView = createPlayerView(scene, textures.toon, { ring: 0x2fff86 });
 const enemyViews = createEnemyViews(scene, textures.toon, cam.camera.quaternion);
 const projectileView = createProjectileView(scene, textures.halo);
 const effects = createEffects(scene, textures.halo);
@@ -138,8 +154,8 @@ function aimFromMouse(px, py) {
   ndc.set((px / window.innerWidth) * 2 - 1, -(py / window.innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, cam.camera);
   if (!raycaster.ray.intersectPlane(aimPlane, hit)) return null;
-  const dx = hit.x - state.player.x;
-  const dz = hit.z - state.player.z;
+  const dx = hit.x - me().x;
+  const dz = hit.z - me().z;
   const len = Math.hypot(dx, dz);
   if (len < 0.3) return null; // souris sur le héros : pas de direction fiable
   return { x: dx / len, y: -dz / len };
@@ -221,7 +237,7 @@ function showPauseInfo() {
   const earned = shadowsEarned(state.shadows, profile.current);
   $('pause-info').innerHTML =
     `Étage ${state.floorIndex + 1} · ${zone.name}<br>` +
-    `${state.kills} ennemi${state.kills > 1 ? 's' : ''} vaincu${state.kills > 1 ? 's' : ''} · ${state.gold} oboles · ` +
+    `${state.kills} ennemi${state.kills > 1 ? 's' : ''} vaincu${state.kills > 1 ? 's' : ''} · ${me().gold} oboles · ` +
     `<span class="earned">${earned} Ombres</span> à rapporter`;
 }
 // Le bouton pause n'apparaît qu'en pleine partie (pas sur les écrans de choix ou de fin)
@@ -256,12 +272,30 @@ function showSeed() {
 
 let lastBoonKey = '';
 function updateHud() {
-  const p = state.player;
+  const p = me();
   healthFill.style.width = `${(100 * p.hp) / p.maxHp}%`;
   healthText.textContent = `${p.hp} / ${p.maxHp}`;
   $('kills').textContent = `${state.kills} vaincu${state.kills > 1 ? 's' : ''}`;
-  $('gold').textContent = `${state.gold} obole${state.gold > 1 ? 's' : ''}`;
+  $('gold').textContent = `${me().gold} obole${me().gold > 1 ? 's' : ''}`;
   $('shadows').textContent = `${state.shadows} Ombre${state.shadows > 1 ? 's' : ''}`;
+  // Co-op : vie de l'allié (ou son état), et mon propre compte à rebours si je suis à terre
+  const a = state.players[1];
+  const allyEl = $('ally-hud');
+  allyEl.hidden = !a;
+  if (a) {
+    const name = CLASSES[a.cls].name;
+    allyEl.textContent = a.out
+      ? `${name} · revient à l’étage suivant`
+      : a.down > 0
+        ? `${name} · à terre (${Math.ceil(a.down / 60)} s)`
+        : `${name} · ${a.hp} / ${a.maxHp} PV`;
+    allyEl.classList.toggle('danger', a.down > 0 || a.out);
+  }
+  const downEl = $('down-info');
+  const mine = me();
+  downEl.classList.toggle('on', state.status === 'playing' && (mine.down > 0 || mine.out));
+  if (mine.down > 0) downEl.textContent = `À terre · ${Math.ceil(mine.down / 60)} s pour être relevé`;
+  else if (mine.out) downEl.textContent = 'Tu reviendras à l’étage suivant';
   const boonKey = JSON.stringify(p.boons);
   if (boonKey !== lastBoonKey) {
     lastBoonKey = boonKey;
@@ -296,24 +330,25 @@ let charonKey = '';
 const charon = $('charon');
 function updateCharon() {
   // Seulement en cours de partie (avec le Pacte, l'état démarre en choix dès sa création)
-  const open = state.status === 'choosing' && started && !threshold.isOpen();
+  // (en co-op, une fois mon choix fait, l'écran se ferme en attendant l'allié)
+  const open = state.status === 'choosing' && !!me().offer && started && !threshold.isOpen();
   charon.classList.toggle('hidden', !open);
   if (!open) {
     charonKey = '';
     return;
   }
-  const key = JSON.stringify([state.offer.boons, state.offer.rerolls, state.offer.free, state.gold, state.player.hp]);
+  const key = JSON.stringify([me().offer.boons, me().offer.rerolls, me().offer.free, me().gold, me().hp]);
   if (key === charonKey) return;
   charonKey = key;
   // Pacte de Charon : choix d'un bienfait au départ, sans descendre
-  const pact = !!state.offer.start;
+  const pact = !!me().offer.start;
   $('charon-title').textContent = pact ? 'Pacte de Charon' : 'Charon, le passeur';
   $('charon-hint').textContent = pact ? 'Choisis le bienfait qui t\'accompagnera' : 'Choisis un bienfait des dieux pour descendre';
   const cards = $('boon-cards');
   cards.innerHTML = '';
-  state.offer.boons.forEach((id, i) => {
+  me().offer.boons.forEach((id, i) => {
     const b = BOONS[id];
-    const lvl = state.player.boons[id] || 0;
+    const lvl = me().boons[id] || 0;
     const btn = document.createElement('button');
     btn.className = 'boon-card';
     btn.type = 'button';
@@ -321,7 +356,7 @@ function updateCharon() {
     btn.addEventListener('click', () => (pendingAction = { choice: i }));
     cards.appendChild(btn);
   });
-  if (!state.offer.boons.length) {
+  if (!me().offer.boons.length) {
     const btn = document.createElement('button');
     btn.className = 'boon-card';
     btn.type = 'button';
@@ -329,14 +364,14 @@ function updateCharon() {
     btn.addEventListener('click', () => (pendingAction = { choice: 0 }));
     cards.appendChild(btn);
   }
-  const p = state.player;
+  const p = me();
   const heal = $('btn-heal');
-  heal.textContent = `Se soigner +${SIM.loot.healAmount} PV · ${healCost(state)} oboles`;
-  heal.disabled = state.gold < healCost(state) || p.hp >= p.maxHp;
+  heal.textContent = `Se soigner +${SIM.loot.healAmount} PV · ${healCost(me())} oboles`;
+  heal.disabled = me().gold < healCost(me()) || p.hp >= p.maxHp;
   const reroll = $('btn-reroll');
-  reroll.textContent = `Autres bienfaits · ${rerollCost(state)} oboles`;
-  reroll.disabled = state.gold < rerollCost(state);
-  $('charon-gold').textContent = `${state.gold} oboles · ${p.hp} / ${p.maxHp} PV`;
+  reroll.textContent = `Autres bienfaits · ${rerollCost(me())} oboles`;
+  reroll.disabled = me().gold < rerollCost(me());
+  $('charon-gold').textContent = `${me().gold} oboles · ${p.hp} / ${p.maxHp} PV`;
 }
 $('btn-heal').addEventListener('click', () => (pendingAction = { shop: 'heal' }));
 $('btn-reroll').addEventListener('click', () => (pendingAction = { shop: 'reroll' }));
@@ -353,9 +388,9 @@ let deathTimer = 0;
 function showDeath() {
   const n = state.floorIndex + 1;
   $('death-text').innerHTML =
-    `Étage ${n} · ${state.kills} ennemi${state.kills > 1 ? 's' : ''} vaincu${state.kills > 1 ? 's' : ''} · ${state.gold} oboles<br>` +
+    `Étage ${n} · ${state.kills} ennemi${state.kills > 1 ? 's' : ''} vaincu${state.kills > 1 ? 's' : ''} · ${me().gold} oboles<br>` +
     `<span class="earned">+${lastEarned} Ombres</span><br>` +
-    `${Object.keys(state.player.boons).length ? `Bienfaits : ${Object.entries(state.player.boons).map(([id, k]) => BOONS[id].name + (k > 1 ? ` ×${k}` : '')).join(', ')}<br>` : ''}` +
+    `${Object.keys(me().boons).length ? `Bienfaits : ${Object.entries(me().boons).map(([id, k]) => BOONS[id].name + (k > 1 ? ` ×${k}` : '')).join(', ')}<br>` : ''}` +
     `<small>Graine ${seed}</small>`;
   deathScreen.classList.remove('hidden');
 }
@@ -363,11 +398,11 @@ const victoryScreen = $('victory-screen');
 function showVictory() {
   const secs = Math.floor(state.tick / SIM.tickRate);
   const time = `${Math.floor(secs / 60)} min ${String(secs % 60).padStart(2, '0')} s`;
-  const boons = Object.entries(state.player.boons)
+  const boons = Object.entries(me().boons)
     .map(([id, k]) => BOONS[id].name + (k > 1 ? ` ×${k}` : ''))
     .join(', ');
   $('victory-text').innerHTML =
-    `Descente en ${time} · ${state.kills} ennemis vaincus · ${state.gold} oboles<br>` +
+    `Descente en ${time} · ${state.kills} ennemis vaincus · ${me().gold} oboles<br>` +
     `<span class="earned">+${lastEarned} Ombres</span><br>` +
     (boons ? `Bienfaits : ${boons}<br>` : '') +
     `<small>Graine ${seed}</small>`;
@@ -440,9 +475,11 @@ function adoptState(next) {
   window.__game.state = state;
   deathScreen.classList.add('hidden');
   victoryScreen.classList.add('hidden');
-  prev.x = state.player.x;
-  prev.z = state.player.z;
-  prev.facing = state.player.facing;
+  prev.x = me().x;
+  prev.z = me().z;
+  prev.facing = me().facing;
+  if (state.players[1]) Object.assign(prevAlly, { x: state.players[1].x, z: state.players[1].z, facing: state.players[1].facing });
+  allyBot = createAllyBot(1);
   prevEnemies.clear();
   gateView.reset();
   pendingAction = null;
@@ -476,7 +513,7 @@ function abandonSavedRun() {
 }
 if (savedRun) {
   const r = runSummary(savedRun);
-  $('resume-text').textContent = `Descente en cours : étage ${r.floor} · ${CLASSES[r.cls].name} · ${r.hp} / ${r.maxHp} PV`;
+  $('resume-text').textContent = `Descente en cours${r.coop ? ' en duo' : ''} : étage ${r.floor} · ${CLASSES[r.cls].name} · ${r.hp} / ${r.maxHp} PV`;
   $('resume-run').hidden = false;
   startText.innerHTML = '';
   $('start-seed').hidden = true; // graine de la partie neuve : sans objet tant que le choix n'est pas fait
@@ -508,22 +545,25 @@ function rebuildFloor() {
 const loop = createFixedStep(STEP);
 const timer = new THREE.Timer();
 // Positions au pas précédent, pour l'interpolation visuelle
-const prev = { x: state.player.x, z: state.player.z, facing: state.player.facing };
+const prev = { x: me().x, z: me().z, facing: me().facing };
+const prevAlly = { x: 0, z: 0, facing: 0 }; // co-op : position de l'allié au pas précédent
 const prevEnemies = new Map(); // id -> { x, z }
 const enemyPos = new Map(); // id -> position interpolée
 let hurtTimeout = 0;
 
 function tick() {
-  prev.x = state.player.x;
-  prev.z = state.player.z;
-  prev.facing = state.player.facing;
+  prev.x = me().x;
+  prev.z = me().z;
+  prev.facing = me().facing;
+  const ally = state.players[1];
+  if (ally) Object.assign(prevAlly, { x: ally.x, z: ally.z, facing: ally.facing });
   for (const e of state.enemies) prevEnemies.set(e.id, { x: e.x, z: e.z });
   let intent = EMPTY_INTENT;
   if (state.status === 'choosing') {
     intent = pendingAction || EMPTY_INTENT;
     pendingAction = null;
   } else if (playing) intent = input.getIntent(cam.screenToWorld, aimFromMouse);
-  stepGame(state, intent);
+  stepGame(state, state.players.length > 1 ? [intent, allyBot(state)] : intent);
   for (const ev of state.events) {
     effects.handle(ev);
     if (ev.type === 'roomLocked') {
@@ -539,7 +579,11 @@ function tick() {
       showBanner('Salle purifiée', 'calm');
     }
     if (ev.type === 'defiance') showBanner('Défi de la Mort', 'calm');
-    if (ev.type === 'playerHurt') {
+    if (ev.type === 'playerDown') showBanner(ev.player === 0 ? 'À terre ! Ton allié peut te relever' : 'Ton allié est à terre : va le relever', 'danger');
+    if (ev.type === 'playerRevived') showBanner(ev.player === 0 ? 'Relevé !' : 'Allié relevé', 'calm');
+    if (ev.type === 'playerOut') showBanner(ev.player === 0 ? 'Tu reviendras à l’étage suivant' : 'Ton allié reviendra à l’étage suivant', 'danger');
+    // Le flash rouge ne concerne que mon héros
+    if (ev.type === 'playerHurt' && ev.player === 0) {
       hurtFlash.classList.add('on');
       clearTimeout(hurtTimeout);
       hurtTimeout = setTimeout(() => hurtFlash.classList.remove('on'), 90);
@@ -571,12 +615,13 @@ function frame(timestamp) {
   if (state.floorIndex !== viewFloor) {
     rebuildFloor();
     gateView.reset();
-    prev.x = state.player.x;
-    prev.z = state.player.z;
+    prev.x = me().x;
+    prev.z = me().z;
+    if (state.players[1]) Object.assign(prevAlly, { x: state.players[1].x, z: state.players[1].z });
     prevEnemies.clear();
   }
 
-  const p = state.player;
+  const p = me();
   const x = prev.x + (p.x - prev.x) * alpha;
   const z = prev.z + (p.z - prev.z) * alpha;
   const facing = lerpAngle(prev.facing, p.facing, alpha);
@@ -585,9 +630,24 @@ function frame(timestamp) {
   updateSpecial();
   updatePauseButton();
   playerView.update(x, z, facing, Math.hypot(p.vx, p.vz), time, {
-    blink: p.invuln > 0 && p.dashTimer === 0 && state.status === 'playing',
+    blink: p.invuln > 0 && p.dashTimer === 0 && p.down === 0 && state.status === 'playing',
     dashing: p.dashTimer > 0,
+    down: p.down > 0,
+    hidden: p.out,
   });
+  // Co-op : l'allié
+  const a = state.players[1];
+  if (a) {
+    allyView.setClass(a.cls);
+    allyView.update(
+      prevAlly.x + (a.x - prevAlly.x) * alpha,
+      prevAlly.z + (a.z - prevAlly.z) * alpha,
+      lerpAngle(prevAlly.facing, a.facing, alpha),
+      Math.hypot(a.vx, a.vz),
+      time,
+      { blink: a.invuln > 0 && a.dashTimer === 0 && a.down === 0, dashing: a.dashTimer > 0, down: a.down > 0, hidden: a.out },
+    );
+  } else allyView.update(0, 0, 0, 0, time, { hidden: true });
   heroLight.position.set(x, CONFIG.heroLight.height, z);
 
   enemyPos.clear();
@@ -639,7 +699,7 @@ const specialBtn = $('btn-special');
 const specialHud = $('special-hud');
 let specialKey = '';
 function updateSpecial() {
-  const p = state.player;
+  const p = me();
   const sp = classRules(p.cls).special;
   const name = SPECIAL_NAMES[sp.id];
   const total = Math.round(sp.cooldown * SIM.tickRate);

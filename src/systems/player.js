@@ -8,9 +8,10 @@ import { dropFromEnemy, dropBossReward } from './loot.js';
 import { nextFloat } from '../core/rng.js';
 import { metaValue, rankOf } from '../meta/tree.js';
 import { classRules } from './classes.js';
+import { isActive } from '../state/gameState.js';
 
-export function updatePlayer(state, intent, dt) {
-  const p = state.player;
+// Un pas du héros p (le joueur qui a envoyé cette intention)
+export function updatePlayer(state, p, intent, dt) {
   const cfg = SIM.player;
   const st = playerStats(p);
   tickDown(p, st);
@@ -61,7 +62,7 @@ export function updatePlayer(state, intent, dt) {
   moveCircle(state.dungeon, pos, p.vx * dt, p.vz * dt, cfg.radius);
   p.x = pos.x;
   p.z = pos.z;
-  if (p.dashTimer > 0 && st.bladeDance) danceStrike(state, st);
+  if (p.dashTimer > 0 && st.bladeDance) danceStrike(state, p, st);
   // Contre un mur, la vitesse réelle est celle du déplacement effectué
   p.vx = (p.x - before.x) / dt;
   p.vz = (p.z - before.z) / dt;
@@ -77,15 +78,15 @@ export function updatePlayer(state, intent, dt) {
   if (intent.attack && p.attackCooldown === 0 && p.dashTimer === 0) {
     if (aiming) p.facing = facingOf(intent.aimX, -intent.aimY);
     else {
-      const target = autoAimTarget(state);
+      const target = autoAimTarget(state, p);
       if (target) p.facing = facingOf(target.x - p.x, target.z - p.z);
     }
     p.attackTimer = ticks(st.attackDuration);
     p.attackCooldown = ticks(st.attackCooldown);
     if (st.weapon === 'sword') {
       state.events.push({ type: 'swing', x: p.x, z: p.z, facing: p.facing, range: st.attackRange, arc: st.attackArc });
-      resolvePlayerHit(state);
-    } else shoot(state, st);
+      resolvePlayerHit(state, p);
+    } else shoot(state, p, st);
   }
 
   // ---------- Capacité spéciale (une par appui, si elle est rechargée) ----------
@@ -94,24 +95,23 @@ export function updatePlayer(state, intent, dt) {
   if (specialPressed && p.specialCooldown === 0 && p.dashTimer === 0) {
     if (aiming) p.facing = facingOf(intent.aimX, -intent.aimY);
     else {
-      const target = autoAimTarget(state);
+      const target = autoAimTarget(state, p);
       if (target) p.facing = facingOf(target.x - p.x, target.z - p.z);
     }
-    useSpecial(state, st);
+    useSpecial(state, p, st);
   }
   // Seconde frappe du Tourbillon / seconde salve de la Volée
   if (p.specialEcho > 0 && --p.specialEcho === 0) {
     const facing = p.facing;
     p.facing = p.echoFacing;
-    useSpecial(state, st, true);
+    useSpecial(state, p, st, true);
     p.facing = facing;
   }
 }
 
 // Capacités spéciales des classes (réglages : SIM.classes[classe].special)
 // echo : seconde frappe ou seconde salve (Tempête, Seconde salve), sans recharge
-function useSpecial(state, st, echo = false) {
-  const p = state.player;
+function useSpecial(state, p, st, echo = false) {
   const sp = st.special;
   if (!echo) {
     p.specialCooldown = ticks(sp.cooldown);
@@ -126,7 +126,7 @@ function useSpecial(state, st, echo = false) {
     const base = p.facing;
     for (let k = 0; k < sp.count; k++) {
       p.facing = base + (k / (sp.count - 1) - 0.5) * sp.spread;
-      shoot(state, st, true);
+      shoot(state, p, st, true);
     }
     p.facing = base;
     state.events.push({ type: 'special', id: 'volley', x: p.x, z: p.z, facing: base, echo });
@@ -142,7 +142,7 @@ function useSpecial(state, st, echo = false) {
     if (d > sp.radius + SIM.enemies[e.type].radius) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
     const dir = d > 1e-6 ? { x: dx / d, z: dz / d } : { x: 0, z: 1 };
-    if (!damageEnemy(state, e, st.damage * sp.damageMult, dir)) continue;
+    if (!damageEnemy(state, e, st.damage * sp.damageMult, dir, p)) continue;
     if (e.boss || e.part) continue; // un boss ne recule pas et n'est pas ralenti
     if (sp.knockback) {
       e.kvx = dir.x * sp.knockback;
@@ -150,12 +150,11 @@ function useSpecial(state, st, echo = false) {
     }
     if (sp.slow) e.slow = ticks(sp.slow);
   }
-  removeDeadEnemies(state);
+  removeDeadEnemies(state, p);
 }
 
 // Le coup touche tous les ennemis dans l'arc, à portée, et visibles (pas à travers un mur)
-function resolvePlayerHit(state) {
-  const p = state.player;
+function resolvePlayerHit(state, p) {
   const st = playerStats(p);
   const dir = dirOf(p.facing);
   // Élan : bonus sur le premier coup après une esquive (consommé même si le coup rate)
@@ -168,16 +167,15 @@ function resolvePlayerHit(state) {
     const r = SIM.enemies[e.type].radius;
     if (!inArc(p.x, p.z, p.facing, st.attackRange, st.attackArc, e.x, e.z, r)) continue;
     if (!hasLineOfSight(state.dungeon, p.x, p.z, e.x, e.z)) continue;
-    damageEnemy(state, e, (st.damage + bonus) * mult, dir);
+    damageEnemy(state, e, (st.damage + bonus) * mult, dir, p);
   }
-  removeDeadEnemies(state);
+  removeDeadEnemies(state, p);
 }
 
 // Chasseresse et Mystique : le coup est un projectile allié (flèche ou orbe), qui
 // part devant le héros dans la direction visée. Il est résolu dans projectiles.js.
 // special : tir d'une capacité (Volée), sans Élan ni événement de tir
-function shoot(state, st, special = false) {
-  const p = state.player;
+function shoot(state, p, st, special = false) {
   const d = dirOf(p.facing);
   // Élan : bonus sur le premier tir après une esquive
   const bonus = !special && p.afterDash > 0 ? st.momentum : 0;
@@ -190,7 +188,7 @@ function shoot(state, st, special = false) {
     p.twinning = true;
     for (const da of [-0.16, 0.16]) {
       p.facing = f + da;
-      shoot(state, { ...st, damage: st.damage * st.twinOrbs }, special);
+      shoot(state, p, { ...st, damage: st.damage * st.twinOrbs }, special);
     }
     p.facing = f;
     p.twinning = false;
@@ -199,7 +197,8 @@ function shoot(state, st, special = false) {
   state.projectiles.push({
     id: state.nextId++,
     kind,
-    friendly: true, // touche les ennemis, jamais le héros
+    friendly: true, // touche les ennemis, jamais les héros
+    owner: p.id, // tireur (ses talents s'appliquent au coup)
     x: p.x + d.x * start,
     z: p.z + d.z * start,
     vx: d.x * st.shotSpeed,
@@ -217,21 +216,20 @@ function shoot(state, st, special = false) {
 }
 
 // Danse des lames : pendant l'esquive, chaque ennemi traversé est frappé une fois
-function danceStrike(state, st) {
-  const p = state.player;
+function danceStrike(state, p, st) {
   let hit = false;
   for (const e of state.enemies) {
     if (e.hp <= 0 || p.danceHits.includes(e.id)) continue;
     if (Math.hypot(e.x - p.x, e.z - p.z) > SIM.enemies[e.type].radius + SIM.player.radius + 0.35) continue;
     p.danceHits.push(e.id);
-    if (damageEnemy(state, e, st.damage, { x: p.dashX, z: p.dashZ })) hit = true;
+    if (damageEnemy(state, e, st.damage, { x: p.dashX, z: p.dashZ }, p)) hit = true;
   }
-  if (hit) removeDeadEnemies(state);
+  if (hit) removeDeadEnemies(state, p);
 }
 
-// Inflige des dégâts du héros à un ennemi (coup ou projectile renvoyé).
+// Inflige des dégâts du héros p à un ennemi (coup ou projectile renvoyé).
 // dir : direction du coup, pour le recul. Renvoie false si l'ennemi n'a pas été touché.
-export function damageEnemy(state, e, amount, dir) {
+export function damageEnemy(state, e, amount, dir, p) {
   if (e.untargetable) return false; // Thanatos disparu dans sa téléportation
   // Un double de Thanatos s'évanouit au premier coup, sans blesser le vrai
   if (e.type === 'thanatosDouble') {
@@ -246,7 +244,7 @@ export function damageEnemy(state, e, amount, dir) {
   }
   // Coup du destin (arbre permanent) : chance de dégâts doublés.
   // Le tirage n'a lieu que si l'amélioration est possédée (sinon la partie ne change pas)
-  const st = playerStats(state.player);
+  const st = playerStats(p);
   let dmg = amount;
   let crit = false;
   if (st.critChance > 0 && nextFloat(state.rng) < st.critChance) {
@@ -275,9 +273,9 @@ export function damageEnemy(state, e, amount, dir) {
   return true;
 }
 
-// Retire les ennemis vaincus : butin, Ombres, Tribut d'Hadès, défaite d'un boss
-export function removeDeadEnemies(state) {
-  const p = state.player;
+// Retire les ennemis vaincus : butin, Ombres, Tribut d'Hadès, défaite d'un boss.
+// p : le héros qui a porté le coup (Tribut, Rage, Instinct de chasse, Colère des Titans)
+export function removeDeadEnemies(state, p) {
   const st = playerStats(p);
   const sh = SIM.shadows;
   // Boss vaincu : ses serviteurs se dissipent avec lui
@@ -295,12 +293,13 @@ export function removeDeadEnemies(state) {
     dropBossReward(state, deadBoss);
     state.shadows += sh.bosses[deadBoss.type] || 0;
     state.bossesDefeated.push(deadBoss.type);
-    // Moisson (talent) : chaque boss vaincu rend le héros plus robuste
-    const grow = metaValue(p.meta, 'harvest');
-    if (grow) {
-      p.maxHp += grow;
-      p.hp += grow;
-      state.events.push({ type: 'heal', amount: grow, x: p.x, z: p.z });
+    // Moisson (talent) : chaque boss vaincu rend plus robuste chaque héros qui la possède
+    for (const h of state.players) {
+      const grow = metaValue(h.meta, 'harvest');
+      if (!grow) continue;
+      h.maxHp += grow;
+      h.hp += grow;
+      state.events.push({ type: 'heal', amount: grow, x: h.x, z: h.z, player: h.id });
     }
     // Thanatos vaincu : c'est la victoire de la partie
     if (deadBoss.type === 'thanatos') {
@@ -321,7 +320,7 @@ export function removeDeadEnemies(state) {
       p.killsSinceHeal = 0;
       if (p.hp < p.maxHp) {
         p.hp++;
-        state.events.push({ type: 'heal', amount: 1, x: p.x, z: p.z });
+        state.events.push({ type: 'heal', amount: 1, x: p.x, z: p.z, player: p.id });
       }
     }
     return false;
@@ -337,8 +336,7 @@ export function removeDeadEnemies(state) {
 }
 
 // Sans visée (mobile) : l'ennemi le plus proche à portée, en privilégiant ceux devant
-export function autoAimTarget(state) {
-  const p = state.player;
+export function autoAimTarget(state, p) {
   let best = null;
   let bestScore = Infinity;
   for (const e of state.enemies) {
@@ -357,32 +355,83 @@ export function autoAimTarget(state) {
   return best;
 }
 
-// Dégâts reçus par le héros (ignorés s'il est invulnérable)
-export function hurtPlayer(state, amount, fromX, fromZ) {
-  const p = state.player;
-  if (p.invuln > 0 || state.status !== 'playing') return false;
+// Dégâts reçus par le héros p (ignorés s'il est invulnérable, à terre ou hors jeu)
+export function hurtPlayer(state, p, amount, fromX, fromZ) {
+  if (p.invuln > 0 || state.status !== 'playing' || !isActive(p)) return false;
   const st = playerStats(p);
   // Parade (Guerrier) : chance d'annuler le coup ; le tirage n'a lieu qu'avec le talent
   if (st.parry > 0 && nextFloat(state.rng) < st.parry) {
     p.invuln = ticks(0.3);
     p.riposte = rankOf(p.meta, 'riposte') > 0;
-    state.events.push({ type: 'parry', x: p.x, z: p.z });
+    state.events.push({ type: 'parry', x: p.x, z: p.z, player: p.id });
     return false;
   }
   p.hp = Math.max(0, p.hp - amount);
   p.invuln = ticks(st.hurtInvuln);
-  state.events.push({ type: 'playerHurt', amount, x: p.x, z: p.z, fromX, fromZ });
+  state.events.push({ type: 'playerHurt', amount, x: p.x, z: p.z, fromX, fromZ, player: p.id });
   if (p.hp === 0 && p.defiance > 0) {
     // Défi de la Mort (arbre permanent) : on se relève, une fois par partie
     p.defiance--;
     p.hp = Math.max(1, Math.round(p.maxHp * metaValue(p.meta, 'defiance')));
     p.invuln = ticks(SIM.player.defianceInvuln);
-    state.events.push({ type: 'defiance', x: p.x, z: p.z });
+    state.events.push({ type: 'defiance', x: p.x, z: p.z, player: p.id });
+  } else if (p.hp === 0 && state.players.length > 1) {
+    // Co-op : à terre, un allié peut le relever
+    p.down = ticks(SIM.coop.downTime);
+    p.revive = 0;
+    p.attackTimer = 0;
+    p.dashTimer = 0;
+    p.vx = 0;
+    p.vz = 0;
+    state.events.push({ type: 'playerDown', x: p.x, z: p.z, player: p.id });
+    checkDefeat(state);
   } else if (p.hp === 0) {
     state.status = 'dead';
-    state.events.push({ type: 'playerDied', x: p.x, z: p.z });
+    state.events.push({ type: 'playerDied', x: p.x, z: p.z, player: p.id });
   }
   return true;
+}
+
+// Blesse chaque héros actif pour qui test(p) est vrai (attaques de zone)
+export function hurtPlayersWhere(state, test, amount, fromX, fromZ) {
+  let any = false;
+  for (const p of state.players) if (isActive(p) && test(p) && hurtPlayer(state, p, amount, fromX, fromZ)) any = true;
+  return any;
+}
+
+// Co-op : relèvement des héros à terre par un allié proche ; sinon, au bout du
+// temps, le héros disparaît jusqu'à l'étage suivant
+export function updateDowned(state) {
+  const c = SIM.coop;
+  for (const p of state.players) {
+    if (p.down === 0) continue;
+    const helped = state.players.some(
+      (a) => a !== p && isActive(a) && Math.hypot(a.x - p.x, a.z - p.z) <= c.reviveRadius,
+    );
+    if (helped) {
+      if (++p.revive >= ticks(c.reviveTime)) {
+        p.down = 0;
+        p.revive = 0;
+        p.hp = Math.max(1, Math.ceil(p.maxHp * c.reviveHp));
+        p.invuln = ticks(c.reviveInvuln);
+        state.events.push({ type: 'playerRevived', x: p.x, z: p.z, player: p.id });
+      }
+      continue;
+    }
+    p.revive = Math.max(0, p.revive - 1);
+    if (--p.down === 0) {
+      p.out = true;
+      state.events.push({ type: 'playerOut', x: p.x, z: p.z, player: p.id });
+    }
+  }
+  checkDefeat(state);
+}
+
+// La partie est perdue quand plus aucun héros n'est debout
+function checkDefeat(state) {
+  if (state.status !== 'playing' || state.players.some(isActive)) return;
+  state.status = 'dead';
+  state.events.push({ type: 'playerDied', x: state.players[0].x, z: state.players[0].z });
 }
 
 function tickDown(p, st) {
@@ -414,7 +463,8 @@ export function tickPoison(state) {
     e.poison--;
     e.hp -= e.poisonDps / SIM.tickRate;
     if (e.poison % 30 === 0) state.events.push({ type: 'poison', id: e.id, x: e.x, z: e.z });
-    if (e.hp <= 0) died = true;
+    if (e.hp <= 0) died = state.players[e.poisonBy || 0];
   }
-  if (died) removeDeadEnemies(state);
+  // Le dernier empoisonneur est crédité de la victoire
+  if (died) removeDeadEnemies(state, died);
 }

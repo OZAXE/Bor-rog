@@ -21,12 +21,13 @@ export function parseRun(text) {
   }
   if (!s || typeof s !== 'object' || s.version !== STATE_VERSION) return null;
   if (s.status !== 'playing' && s.status !== 'choosing') return null;
-  if (!s.player || !s.dungeon || !Array.isArray(s.dungeon.tiles) || !Array.isArray(s.enemies) || !s.rng) return null;
+  if (!Array.isArray(s.players) || !s.players.length || !s.dungeon || !Array.isArray(s.dungeon.tiles) || !Array.isArray(s.enemies) || !s.rng) return null;
   s.events = [];
   return s;
 }
 
 // Résumé affiché pour proposer la reprise
 export function runSummary(state) {
-  return { floor: state.floorIndex + 1, cls: state.player.cls, hp: state.player.hp, maxHp: state.player.maxHp, seed: state.seed };
+  const p = state.players[0];
+  return { floor: state.floorIndex + 1, cls: p.cls, hp: p.hp, maxHp: p.maxHp, seed: state.seed, coop: state.players.length > 1 };
 }

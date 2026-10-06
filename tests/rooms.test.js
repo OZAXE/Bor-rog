@@ -46,8 +46,8 @@ test('les grilles isolent complètement la salle (sur 120 étages)', () => {
 function enterFirstCombatRoom(s) {
   const room = s.dungeon.rooms.find((r) => r.type === 'combat' && s.enemies.some((e) => inRoom(r, e.x, e.z)));
   const cc = center(room);
-  s.player.x = cc.c + 0.5;
-  s.player.z = cc.r + 0.5;
+  s.players[0].x = cc.c + 0.5;
+  s.players[0].z = cc.r + 0.5;
   return room;
 }
 
@@ -66,9 +66,9 @@ test("rester sur le seuil ne verrouille pas (la grille ne se ferme jamais sur le
   const s = createGameState('seuil');
   const room = s.dungeon.rooms.find((r) => r.type === 'combat' && roomDoors(s.dungeon, r).length);
   const door = roomDoors(s.dungeon, room)[0];
-  s.player.x = door.c + 0.5;
-  s.player.z = door.r + 0.5;
-  assert.equal(roomAround(s.dungeon, s.player.x, s.player.z), null);
+  s.players[0].x = door.c + 0.5;
+  s.players[0].z = door.r + 0.5;
+  assert.equal(roomAround(s.dungeon, s.players[0].x, s.players[0].z), null);
   stepGame(s, {});
   assert.equal(s.lock, null);
 });
@@ -98,21 +98,21 @@ test('le héros ne peut pas sortir tant que la salle est verrouillée', () => {
   const room = s.dungeon.rooms.find((r) => r.id === s.lock.roomId);
   // On fonce vers la porte pendant 3 secondes en restant invulnérable
   for (let i = 0; i < 180; i++) {
-    s.player.invuln = 10;
-    const dx = door.c + 0.5 - s.player.x;
-    const dz = door.r + 0.5 - s.player.z;
+    s.players[0].invuln = 10;
+    const dx = door.c + 0.5 - s.players[0].x;
+    const dz = door.r + 0.5 - s.players[0].z;
     const l = Math.hypot(dx, dz) || 1;
     stepGame(s, { moveX: dx / l, moveY: -dz / l });
   }
-  assert.ok(inRoom(room, s.player.x, s.player.z), 'le héros est sorti de la salle verrouillée');
+  assert.ok(inRoom(room, s.players[0].x, s.players[0].z), 'le héros est sorti de la salle verrouillée');
 });
 
 test('une salle sans ennemi à l\'intérieur ne se verrouille pas', () => {
   const s = createGameState('vide', { enemies: false });
   const room = s.dungeon.rooms.find((r) => r.type === 'combat');
   const cc = center(room);
-  s.player.x = cc.c + 0.5;
-  s.player.z = cc.r + 0.5;
+  s.players[0].x = cc.c + 0.5;
+  s.players[0].z = cc.r + 0.5;
   stepGame(s, {});
   assert.equal(s.lock, null);
 });
@@ -128,8 +128,8 @@ test('anti-blocage : sur 20 parties agitées, les enfermés sont toujours dans l
         floor = s.floorIndex;
         bot = makePathBot(s.dungeon, s.dungeon.stairs);
       }
-      s.player.invuln = Math.max(s.player.invuln, 2); // on veut tester le verrou, pas mourir
-      let intent = bot(s.player);
+      s.players[0].invuln = Math.max(s.players[0].invuln, 2); // on veut tester le verrou, pas mourir
+      let intent = bot(s.players[0]);
       if (s.lock) {
         // Enfermé : on va frapper l'ennemi enfermé le plus proche
         const room = s.dungeon.rooms.find((r) => r.id === s.lock.roomId);
@@ -139,8 +139,8 @@ test('anti-blocage : sur 20 parties agitées, les enfermés sont toujours dans l
           assert.ok(!overlapsSolid(s.dungeon, e, SIM.enemies[e.type].radius), `ennemi ${e.id} dans une grille`);
         }
         const e = targets[0];
-        const dx = e.x - s.player.x;
-        const dz = e.z - s.player.z;
+        const dx = e.x - s.players[0].x;
+        const dz = e.z - s.players[0].z;
         const l = Math.hypot(dx, dz) || 1;
         intent = { moveX: dx / l, moveY: -dz / l, aimX: dx / l, aimY: -dz / l, attack: l < 1.8 };
       } else intent = { ...intent, attack: true };

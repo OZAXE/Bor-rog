@@ -44,15 +44,20 @@ export function floorScaling(floorIndex) {
   };
 }
 
-// Caractéristiques effectives d'un ennemi
-export function enemyStats(type, floorIndex, elite = false) {
+// Caractéristiques effectives d'un ennemi.
+// players : nombre de joueurs (co-op : plus de PV, cf. SIM.coop)
+export function enemyStats(type, floorIndex, elite = false, players = 1) {
   const base = SIM.enemies[type];
+  const extra = Math.max(0, players - 1);
   // Un boss a des valeurs fixes (il n'apparaît qu'à son propre étage)
-  if (base.boss) return { hp: base.hp, speed: base.speed, windup: 0, recover: 0 };
+  if (base.boss) {
+    const hp = extra ? Math.round(base.hp * (1 + extra * (SIM.bosses[type] ? SIM.coop.bossHp : SIM.coop.enemyHp))) : base.hp;
+    return { hp, speed: base.speed, windup: 0, recover: 0 };
+  }
   const k = floorScaling(floorIndex);
   const e = DIFFICULTY.elite;
-  const hpMul = k.hp * (elite ? e.hpFactor : 1);
-  const dmgAdd = k.damage + (elite ? e.damageBonus : 0);
+  const hpMul = k.hp * (elite ? e.hpFactor : 1) * (1 + extra * SIM.coop.enemyHp);
+  const dmgAdd = k.damage + (elite ? e.damageBonus : 0) + extra * SIM.coop.enemyDamage;
   const spdMul = k.speed * (elite ? e.speedFactor : 1);
   const stats = {
     hp: Math.max(1, Math.round(base.hp * hpMul)),

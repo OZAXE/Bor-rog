@@ -104,7 +104,7 @@ function arena() {
   for (let r = 1; r < W - 1; r++) for (let c = 1; c < W - 1; c++) tiles[r * W + c] = TILE.FLOOR;
   s.dungeon = { width: W, height: W, tiles, rooms: [], decor: [], start: { c: 12, r: 12 }, stairs: { c: 1, r: 1 } };
   s.chests = [];
-  Object.assign(s.player, { x: 12.5, z: 16.5, vx: 0, vz: 0, facing: 0 });
+  Object.assign(s.players[0], { x: 12.5, z: 16.5, vx: 0, vz: 0, facing: 0 });
   return s;
 }
 function addFury(s, z = 11.5) {
@@ -123,9 +123,9 @@ test('Furie : annonce sa charge (sans dégât) puis touche le héros resté dans
   stepGame(s, {});
   assert.equal(e.mode, 'windup');
   run(s, ticks(SIM.enemies.fury.windup) - 2);
-  assert.equal(s.player.hp, SIM.player.maxHp, 'touché pendant l\'annonce');
+  assert.equal(s.players[0].hp, SIM.player.maxHp, 'touché pendant l\'annonce');
   run(s, 40);
-  assert.equal(s.player.hp, SIM.player.maxHp - SIM.enemies.fury.damage, 'la charge aurait dû toucher');
+  assert.equal(s.players[0].hp, SIM.player.maxHp - SIM.enemies.fury.damage, 'la charge aurait dû toucher');
 });
 
 test("Furie : un pas de côté pendant l'annonce suffit à l'éviter", () => {
@@ -135,7 +135,7 @@ test("Furie : un pas de côté pendant l'annonce suffit à l'éviter", () => {
   // On s'écarte vers l'est pendant l'annonce
   run(s, ticks(SIM.enemies.fury.windup), { moveX: 1, moveY: 0 });
   run(s, 40);
-  assert.equal(s.player.hp, SIM.player.maxHp);
+  assert.equal(s.players[0].hp, SIM.player.maxHp);
 });
 
 test("Furie : esquiver à travers la charge l'évite, et elle ne touche qu'une fois par charge", () => {
@@ -145,20 +145,20 @@ test("Furie : esquiver à travers la charge l'évite, et elle ne touche qu'une f
   run(s, ticks(SIM.enemies.fury.windup));
   // Elle charge vers le sud : on esquive vers le nord, à travers elle
   let g = 0;
-  while (e.mode === 'charge' && Math.abs(e.z - s.player.z) > 1.4 && g++ < 60) stepGame(s, {});
+  while (e.mode === 'charge' && Math.abs(e.z - s.players[0].z) > 1.4 && g++ < 60) stepGame(s, {});
   stepGame(s, { moveX: 0, moveY: 1, dash: true });
   run(s, 30);
-  assert.equal(s.player.hp, SIM.player.maxHp);
+  assert.equal(s.players[0].hp, SIM.player.maxHp);
 
   const s2 = arena();
   addFury(s2);
   stepGame(s2, {});
-  s2.player.invuln = 0;
+  s2.players[0].invuln = 0;
   run(s2, 80, () => {
-    s2.player.invuln = 0; // aucune protection : on compte les coups bruts
+    s2.players[0].invuln = 0; // aucune protection : on compte les coups bruts
     return {};
   });
-  const hits = SIM.player.maxHp - s2.player.hp;
+  const hits = SIM.player.maxHp - s2.players[0].hp;
   assert.equal(hits, SIM.enemies.fury.damage, `touché ${hits / SIM.enemies.fury.damage} fois par une seule charge`);
 });
 
@@ -166,8 +166,8 @@ test("Furie : si elle percute un mur, elle reste étourdie plus longtemps", () =
   const s = arena();
   // Mur entre la Furie et le héros, assez loin pour qu'elle ait le temps de s'élancer
   const e = addFury(s, 6.5);
-  s.player.z = 12.5;
-  s.player.invuln = 99999;
+  s.players[0].z = 12.5;
+  s.players[0].invuln = 99999;
   stepGame(s, {});
   for (let c = 1; c < 23; c++) s.dungeon.tiles[9 * 24 + c] = TILE.WALL;
   run(s, ticks(SIM.enemies.fury.windup) + 20);
@@ -180,7 +180,7 @@ test("Furie : n'annonce pas de charge si un obstacle bouche la voie", () => {
   const s = arena();
   s.dungeon.tiles[14 * 24 + 12] = TILE.PILLAR;
   const e = addFury(s);
-  s.player.invuln = 99999;
+  s.players[0].invuln = 99999;
   stepGame(s, {});
   assert.equal(e.mode, 'chase');
 });

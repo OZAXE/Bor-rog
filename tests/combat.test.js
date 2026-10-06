@@ -18,7 +18,7 @@ function arena() {
   const tiles = new Array(W * W).fill(TILE.WALL);
   for (let r = 1; r < W - 1; r++) for (let c = 1; c < W - 1; c++) tiles[r * W + c] = TILE.FLOOR;
   state.dungeon = { width: W, height: W, tiles, rooms: [], decor: [], start: { c: 11, r: 11 }, stairs: { c: 1, r: 1 } };
-  Object.assign(state.player, { x: 11.5, z: 11.5, vx: 0, vz: 0, facing: 0 });
+  Object.assign(state.players[0], { x: 11.5, z: 11.5, vx: 0, vz: 0, facing: 0 });
   return state;
 }
 function addEnemy(state, type, x, z, extra = {}) {
@@ -54,7 +54,7 @@ test('pas de coup à travers un mur', () => {
   const s = arena();
   s.dungeon.tiles[12 * 22 + 11] = TILE.WALL; // mur juste au sud du héros
   const e = addEnemy(s, 'shade', 11.5, 13.3);
-  s.player.z = 11.6;
+  s.players[0].z = 11.6;
   stepGame(s, { ...SOUTH, attack: true });
   assert.equal(e.hp, SIM.enemies.shade.hp);
 });
@@ -89,7 +89,7 @@ test("un ennemi à 0 PV disparaît, est compté et émet un événement", () => 
 
 test('sans visée (mobile), le coup se tourne vers l\'ennemi le plus proche', () => {
   const s = arena();
-  s.player.facing = 0; // regarde au sud
+  s.players[0].facing = 0; // regarde au sud
   const e = addEnemy(s, 'shade', 12.7, 11.5); // à l'est
   stepGame(s, { attack: true });
   assert.equal(e.hp, SIM.enemies.shade.hp - 1, 'la visée automatique aurait dû le toucher');
@@ -100,9 +100,9 @@ test("l'Ombre prévient avant de frapper : aucun dégât pendant la préparation
   addEnemy(s, 'shade', 11.5, 12.4, { alert: true, mode: 'chase' });
   const windup = ticks(SIM.enemies.shade.windup);
   run(s, windup - 1);
-  assert.equal(s.player.hp, SIM.player.maxHp, 'touché pendant la préparation');
+  assert.equal(s.players[0].hp, SIM.player.maxHp, 'touché pendant la préparation');
   run(s, 3);
-  assert.equal(s.player.hp, SIM.player.maxHp - SIM.enemies.shade.damage, 'le coup aurait dû partir');
+  assert.equal(s.players[0].hp, SIM.player.maxHp - SIM.enemies.shade.damage, 'le coup aurait dû partir');
 });
 
 test("esquiver pendant la préparation évite le coup", () => {
@@ -112,7 +112,7 @@ test("esquiver pendant la préparation évite le coup", () => {
   // esquive vers le nord, loin du coup
   stepGame(s, { moveX: 0, moveY: 1, dash: true });
   run(s, ticks(SIM.enemies.shade.windup) + 5, { moveX: 0, moveY: 1 });
-  assert.equal(s.player.hp, SIM.player.maxHp);
+  assert.equal(s.players[0].hp, SIM.player.maxHp);
 });
 
 test('invulnérable après un coup reçu : pas de double dégât immédiat', () => {
@@ -120,7 +120,7 @@ test('invulnérable après un coup reçu : pas de double dégât immédiat', () 
   addEnemy(s, 'shade', 11.5, 12.4, { alert: true, mode: 'windup', timer: 1, aimX: 0, aimZ: -1, facing: Math.PI });
   addEnemy(s, 'shade', 12.4, 11.5, { alert: true, mode: 'windup', timer: 2, aimX: -1, aimZ: 0, facing: -Math.PI / 2 });
   run(s, 3);
-  assert.equal(s.player.hp, SIM.player.maxHp - SIM.enemies.shade.damage);
+  assert.equal(s.players[0].hp, SIM.player.maxHp - SIM.enemies.shade.damage);
 });
 
 test("l'archer tire, la flèche blesse, mais traverse le héros pendant l'esquive", () => {
@@ -129,7 +129,7 @@ test("l'archer tire, la flèche blesse, mais traverse le héros pendant l'esquiv
   run(s, ticks(SIM.enemies.archer.windup) + 2);
   assert.equal(s.projectiles.length, 1, 'la flèche aurait dû partir');
   run(s, 60);
-  assert.equal(s.player.hp, SIM.player.maxHp - SIM.enemies.archer.arrowDamage);
+  assert.equal(s.players[0].hp, SIM.player.maxHp - SIM.enemies.archer.arrowDamage);
 
   // Esquive À TRAVERS la flèche (vers l'archer) : seule l'invulnérabilité peut l'éviter
   const s2 = arena();
@@ -137,35 +137,35 @@ test("l'archer tire, la flèche blesse, mais traverse le héros pendant l'esquiv
   run(s2, ticks(SIM.enemies.archer.windup) + 2);
   assert.equal(s2.projectiles.length, 1);
   let guard = 0;
-  while (s2.projectiles.length && s2.projectiles[0].z - s2.player.z > 1.2 && guard++ < 120) stepGame(s2, {});
+  while (s2.projectiles.length && s2.projectiles[0].z - s2.players[0].z > 1.2 && guard++ < 120) stepGame(s2, {});
   stepGame(s2, { moveX: 0, moveY: -1, dash: true }); // vers le sud, droit sur la flèche
-  const zBefore = s2.player.z;
+  const zBefore = s2.players[0].z;
   run(s2, 12, { moveX: 0, moveY: -1 });
-  assert.ok(s2.player.z - zBefore > 1.5, "l'esquive aurait dû traverser la trajectoire");
-  assert.equal(s2.player.hp, SIM.player.maxHp, "la flèche n'aurait pas dû toucher pendant l'esquive");
+  assert.ok(s2.players[0].z - zBefore > 1.5, "l'esquive aurait dû traverser la trajectoire");
+  assert.equal(s2.players[0].hp, SIM.player.maxHp, "la flèche n'aurait pas dû toucher pendant l'esquive");
   // ... et elle continue sa course derrière le héros (elle le traverse, elle n'est pas absorbée)
   assert.equal(s2.projectiles.length, 1, 'la flèche aurait dû passer à travers');
-  assert.ok(s2.projectiles[0].z < s2.player.z - 1);
+  assert.ok(s2.projectiles[0].z < s2.players[0].z - 1);
 });
 
 test('les flèches se brisent sur les murs', () => {
   const s = arena();
   s.projectiles.push({ id: 99, x: 11.5, z: 11.5, vx: 0, vz: -8.5, travelLeft: 30, damage: 1 });
-  s.player.x = 5.5; // hors trajectoire
+  s.players[0].x = 5.5; // hors trajectoire
   run(s, 120);
   assert.equal(s.projectiles.length, 0);
 });
 
 test("l'esquive ne traverse pas les murs et a un temps de recharge", () => {
   const s = arena();
-  s.player.x = 2.5;
+  s.players[0].x = 2.5;
   stepGame(s, { moveX: -1, moveY: 0, dash: true });
   run(s, 15, { moveX: -1, moveY: 0 });
-  assert.ok(!overlapsSolid(s.dungeon, s.player, SIM.player.radius));
+  assert.ok(!overlapsSolid(s.dungeon, s.players[0], SIM.player.radius));
   // Maintenir le bouton (bien plus longtemps que la recharge) ne relance pas d'esquive
   const count = (pattern) => {
     const s2 = arena();
-    s2.player.x = 3.5;
+    s2.players[0].x = 3.5;
     let dashes = 0;
     for (let i = 0; i < 90; i++) {
       stepGame(s2, { moveX: i < 45 ? 1 : -1, dash: pattern(i) });
@@ -181,7 +181,7 @@ test("l'esquive ne traverse pas les murs et a un temps de recharge", () => {
 
 test('mort : statut "dead", puis la partie ne bouge plus', () => {
   const s = arena();
-  s.player.hp = 1;
+  s.players[0].hp = 1;
   addEnemy(s, 'shade', 11.5, 12.4, { alert: true, mode: 'windup', timer: 1, aimX: 0, aimZ: -1, facing: Math.PI });
   run(s, 2);
   assert.equal(s.status, 'dead');
@@ -193,7 +193,7 @@ test('mort : statut "dead", puis la partie ne bouge plus', () => {
 test('deux ennemis serrés contre un mur ne sont jamais poussés dedans', () => {
   const s = arena();
   for (let r = 1; r < 21; r++) s.dungeon.tiles[r * 22 + 15] = TILE.WALL; // mur vertical en c = 15
-  s.player.x = 3.5; // loin : les ennemis restent immobiles
+  s.players[0].x = 3.5; // loin : les ennemis restent immobiles
   const a = addEnemy(s, 'shade', 14.6, 11.5);
   const b = addEnemy(s, 'shade', 14.62, 11.52);
   stepGame(s, {});
@@ -208,12 +208,12 @@ test('un ennemi contourne un pilier au lieu de rester coincé derrière', () => 
     s.dungeon.tiles[9 * 22 + 11] = TILE.PILLAR;
     s.dungeon.tiles[9 * 22 + 10] = TILE.PILLAR;
     s.dungeon.tiles[9 * 22 + 12] = TILE.PILLAR;
-    s.player.z = 11.5;
-    s.player.invuln = 9999;
+    s.players[0].z = 11.5;
+    s.players[0].invuln = 9999;
     const e = addEnemy(s, type, 11.5, 6.5, { alert: true, mode: 'chase', shotCooldown: 9999 });
     run(s, 60 * 4);
     if (type === 'shade') {
-      assert.ok(Math.hypot(e.x - s.player.x, e.z - s.player.z) < 2, `l'Ombre est restée derrière le pilier (${e.x.toFixed(1)}, ${e.z.toFixed(1)})`);
+      assert.ok(Math.hypot(e.x - s.players[0].x, e.z - s.players[0].z) < 2, `l'Ombre est restée derrière le pilier (${e.x.toFixed(1)}, ${e.z.toFixed(1)})`);
     } else {
       // L'archer doit avoir retrouvé une ligne de tir sur le héros
       const free = !overlapsSolid(s.dungeon, e, 0.3);
@@ -226,9 +226,9 @@ test("un archer caché derrière un pilier, même tout près, se replace et fini
   const s = arena();
   // Archer collé au mur nord, pilier entre lui et le héros, à 3 m (moins que sa distance préférée)
   s.dungeon.tiles[2 * 22 + 11] = TILE.PILLAR;
-  s.player.x = 11.5;
-  s.player.z = 4.3;
-  s.player.invuln = 99999;
+  s.players[0].x = 11.5;
+  s.players[0].z = 4.3;
+  s.players[0].invuln = 99999;
   addEnemy(s, 'archer', 11.5, 1.35, { alert: true, mode: 'chase', shotCooldown: 0 });
   let shots = 0;
   for (let i = 0; i < 60 * 5; i++) {

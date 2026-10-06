@@ -36,8 +36,8 @@ function arena(cls, meta = {}) {
   s.chests = [];
   s.pickups = [];
   s.status = 'playing';
-  s.offer = null;
-  Object.assign(s.player, { x: 15.5, z: 5.5, vx: 0, vz: 0, facing: 0 });
+  s.players[0].offer = null;
+  Object.assign(s.players[0], { x: 15.5, z: 5.5, vx: 0, vz: 0, facing: 0 });
   return s;
 }
 function dummy(s, x, z, hp = 100) {
@@ -89,9 +89,9 @@ test('Parade : la bonne part de coups parés au rang 2, et aucun tirage sans le 
     const s = arena('warrior', meta);
     let parried = 0;
     for (let i = 0; i < 4000; i++) {
-      s.player.invuln = 0;
-      s.player.hp = s.player.maxHp;
-      hurtPlayer(s, 1, 0, 0);
+      s.players[0].invuln = 0;
+      s.players[0].hp = s.players[0].maxHp;
+      hurtPlayer(s, s.players[0], 1, 0, 0);
       parried += events(s, 'parry').length;
       s.events.length = 0;
     }
@@ -99,7 +99,7 @@ test('Parade : la bonne part de coups parés au rang 2, et aucun tirage sans le 
   };
   const s = arena('warrior', bare('warrior'));
   const rng = JSON.stringify(s.rng);
-  hurtPlayer(s, 1, 0, 0);
+  hurtPlayer(s, s.players[0], 1, 0, 0);
   assert.equal(JSON.stringify(s.rng), rng);
   assert.equal(rate(bare('warrior')), 0);
   const r = rate(cbuild('warrior', { parry: 2 }));
@@ -110,8 +110,8 @@ test('Parade : la bonne part de coups parés au rang 2, et aucun tirage sans le 
 test('Riposte : après une parade, le coup suivant fait double dégâts', () => {
   const s = arena('warrior', cbuild('warrior', { riposte: 1 }));
   const e = dummy(s, 15.5, 6.6);
-  const base = playerStats(s.player).damage;
-  s.player.riposte = true;
+  const base = playerStats(s.players[0]).damage;
+  s.players[0].riposte = true;
   stepGame(s, { ...SOUTH, attack: true });
   assert.equal(100 - e.hp, base * 2);
   run(s, 30);
@@ -121,22 +121,22 @@ test('Riposte : après une parade, le coup suivant fait double dégâts', () => 
   assert.equal(hp - e.hp, base);
   // Une vraie parade arme la Riposte (on frappe jusqu'à obtenir une parade)
   const t = arena('warrior', cbuild('warrior', { riposte: 1 }));
-  for (let i = 0; i < 200 && !t.player.riposte; i++) {
-    t.player.invuln = 0;
-    t.player.hp = t.player.maxHp;
-    hurtPlayer(t, 1, 0, 0);
+  for (let i = 0; i < 200 && !t.players[0].riposte; i++) {
+    t.players[0].invuln = 0;
+    t.players[0].hp = t.players[0].maxHp;
+    hurtPlayer(t, t.players[0], 1, 0, 0);
   }
-  assert.ok(t.player.riposte, 'la parade aurait dû armer la Riposte');
+  assert.ok(t.players[0].riposte, 'la parade aurait dû armer la Riposte');
 });
 
 test('Rempart : des PV maximum en plus', () => {
-  const hp = (meta) => createGameState('rempart', { cls: 'warrior', meta }).player.maxHp;
+  const hp = (meta) => createGameState('rempart', { cls: 'warrior', meta }).players[0].maxHp;
   assert.equal(hp(cbuild('warrior', { bulwark: 1 })), hp(cbuild('warrior', { riposte: 1 })) + TALENTS.bulwark.per);
 });
 
 test('Élan du cyclone et Grand cyclone : Tourbillon plus fréquent et plus large', () => {
-  const a = playerStats(arena('warrior', bare('warrior')).player).special;
-  const b = playerStats(arena('warrior', cbuild('warrior', { whirlHaste: 2, whirlSize: 2 })).player).special;
+  const a = playerStats(arena('warrior', bare('warrior')).players[0]).special;
+  const b = playerStats(arena('warrior', cbuild('warrior', { whirlHaste: 2, whirlSize: 2 })).players[0]).special;
   assert.ok(Math.abs(b.cooldown - a.cooldown * 0.7) < 1e-9);
   assert.ok(Math.abs(b.radius - a.radius * 1.4) < 1e-9);
 });
@@ -164,10 +164,10 @@ test('Tempête : le Tourbillon frappe une seconde fois juste après', () => {
 
 test('Colère des Titans : chaque ennemi vaincu recharge le Tourbillon de 1 s', () => {
   const s = arena('warrior', cbuild('warrior', { titan: 1 }));
-  s.player.specialCooldown = ticks(5);
+  s.players[0].specialCooldown = ticks(5);
   dummy(s, 15.5, 6.6, 1);
   stepGame(s, { ...SOUTH, attack: true });
-  assert.equal(s.player.specialCooldown, ticks(5) - 1 - ticks(1));
+  assert.equal(s.players[0].specialCooldown, ticks(5) - 1 - ticks(1));
 });
 
 // ---------- Chasseresse ----------
@@ -213,7 +213,7 @@ test('Tir précis : plus de dégâts sur une cible lointaine', () => {
 });
 
 test('Carquois léger, Volée nourrie et Seconde salve', () => {
-  const st = playerStats(arena('huntress', cbuild('huntress', { quiver: 2, barrage: 2 })).player).special;
+  const st = playerStats(arena('huntress', cbuild('huntress', { quiver: 2, barrage: 2 })).players[0]).special;
   assert.ok(Math.abs(st.cooldown - SIM.classes.huntress.special.cooldown * 0.7) < 1e-9);
   assert.equal(st.count, SIM.classes.huntress.special.count + 4);
   const arrows = (meta) => {
@@ -231,27 +231,27 @@ test('Carquois léger, Volée nourrie et Seconde salve', () => {
   const one = arrows(bare('huntress'));
   assert.equal(one, SIM.classes.huntress.special.count);
   const echo = cbuild('huntress', { echoVolley: 1 });
-  const perVolley = playerStats(arena('huntress', echo).player).special.count; // Volée nourrie (parent) compris
+  const perVolley = playerStats(arena('huntress', echo).players[0]).special.count; // Volée nourrie (parent) compris
   assert.equal(arrows(echo), 2 * perVolley, 'seconde salve');
 });
 
 test('Instinct de chasse : plus rapide et plus de cadence après avoir vaincu un ennemi', () => {
   const s = arena('huntress', cbuild('huntress', { hunt: 1 }));
-  const before = playerStats(s.player);
+  const before = playerStats(s.players[0]);
   dummy(s, 15.5, 8.5, 1);
   stepGame(s, { ...SOUTH, attack: true });
   run(s, 30);
-  const after = playerStats(s.player);
+  const after = playerStats(s.players[0]);
   assert.ok(after.speed > before.speed && after.attackCooldown < before.attackCooldown);
   run(s, ticks(3));
-  assert.equal(playerStats(s.player).speed, before.speed);
+  assert.equal(playerStats(s.players[0]).speed, before.speed);
 });
 
 // ---------- Mystique ----------
 
 test('Orbe ample, Givre profond et Nova vive', () => {
-  const a = playerStats(arena('mystic', bare('mystic')).player);
-  const b = playerStats(arena('mystic', cbuild('mystic', { bigOrb: 2, deepFreeze: 2, quickNova: 2 })).player);
+  const a = playerStats(arena('mystic', bare('mystic')).players[0]);
+  const b = playerStats(arena('mystic', cbuild('mystic', { bigOrb: 2, deepFreeze: 2, quickNova: 2 })).players[0]);
   assert.ok(Math.abs(b.blast - a.blast * 1.3) < 1e-9);
   assert.equal(b.special.slow, a.special.slow + 3);
   assert.ok(Math.abs(b.special.cooldown - a.special.cooldown * 0.7) < 1e-9);
@@ -262,7 +262,7 @@ test('Orbes jumeaux : deux orbes, chacun un peu moins fort', () => {
   stepGame(s, { ...SOUTH, attack: true });
   const orbs = s.projectiles.filter((a) => a.kind === 'orb');
   assert.equal(orbs.length, 2);
-  const full = playerStats(s.player).damage;
+  const full = playerStats(s.players[0]).damage;
   for (const o of orbs) assert.ok(Math.abs(o.damage - full * TALENTS.twinOrbs.per) < 1e-9);
 });
 

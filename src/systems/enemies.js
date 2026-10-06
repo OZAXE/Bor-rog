@@ -16,30 +16,32 @@ import { moveCircle } from './collision.js';
 import { hasLineOfSight, hasClearPath, facingOf, inArc } from './geometry.js';
 import { walkDistances } from '../dungeon/generate.js';
 import { isWalkable, tileAt } from '../dungeon/tiles.js';
-import { hurtPlayer } from './player.js';
+import { hurtPlayersWhere } from './player.js';
+import { nearestPlayer, isActive } from '../state/gameState.js';
 import { cerberusBrain, resolveBossCharge, hydraBrain, hydraHeadBrain, thanatosBrain, thanatosDoubleBrain } from './bosses.js';
 
 export function updateEnemies(state, dt) {
-  const p = state.player;
-  // Carte des distances jusqu'au héros (plus court chemin sur la grille), calculée
-  // au plus une fois par pas et seulement si un ennemi doit contourner un obstacle
-  let flow = null;
-  const getFlow = () => {
-    if (!flow) flow = walkDistances(state.dungeon, { c: Math.floor(p.x), r: Math.floor(p.z) });
-    return flow;
+  // Carte des distances jusqu'à chaque héros (plus court chemin sur la grille), calculée
+  // au plus une fois par pas et par héros, seulement si un ennemi doit contourner un obstacle
+  const flows = new Map();
+  const getFlow = (p) => {
+    if (!flows.has(p.id)) flows.set(p.id, walkDistances(state.dungeon, { c: Math.floor(p.x), r: Math.floor(p.z) }));
+    return flows.get(p.id);
   };
-  const ctx = { getFlow };
   for (const e of state.enemies) {
     const cfg = SIM.enemies[e.type];
     if (e.hitFlash > 0) e.hitFlash--;
     if (e.shotCooldown > 0) e.shotCooldown--;
 
-    const dx = p.x - e.x;
-    const dz = p.z - e.z;
+    // Cible : le héros actif le plus proche (en co-op, l'autre peut être à terre)
+    const p = nearestPlayer(state, e.x, e.z);
+    const ctx = { target: p, getFlow: () => getFlow(p) };
+    const dx = p ? p.x - e.x : 0;
+    const dz = p ? p.z - e.z : 0;
     const dist = Math.hypot(dx, dz);
 
     // Repérage : à portée ET en ligne de vue (on ne voit pas à travers les murs)
-    if (!e.alert && dist <= cfg.aggroRange && hasLineOfSight(state.dungeon, e.x, e.z, p.x, p.z)) {
+    if (p && !e.alert && dist <= cfg.aggroRange && hasLineOfSight(state.dungeon, e.x, e.z, p.x, p.z)) {
       e.alert = true;
       e.mode = 'chase';
       state.events.push({ type: 'alert', id: e.id, x: e.x, z: e.z });
@@ -53,7 +55,7 @@ export function updateEnemies(state, dt) {
       e.slow--;
       frozen = state.tick % 2 === 1;
     }
-    if (e.alert && state.status === 'playing' && !frozen) {
+    if (p && e.alert && state.status === 'playing' && !frozen) {
       if (e.type === 'shade') ({ mvx, mvz } = shadeBrain(state, e, cfg, dx, dz, dist, ctx));
       else if (e.type === 'archer') ({ mvx, mvz } = archerBrain(state, e, cfg, dx, dz, dist, ctx));
       else if (e.type === 'fury') ({ mvx, mvz } = furyBrain(state, e, cfg, dx, dz, dist, ctx));
@@ -87,7 +89,6 @@ export function updateEnemies(state, dt) {
 }
 
 function shadeBrain(state, e, cfg, dx, dz, dist, ctx) {
-  const p = state.player;
   switch (e.mode) {
     case 'chase': {
       e.facing = facingOf(dx, dz);
@@ -110,9 +111,7 @@ function shadeBrain(state, e, cfg, dx, dz, dist, ctx) {
       e.kvx += e.aimX * cfg.lunge;
       e.kvz += e.aimZ * cfg.lunge;
       state.events.push({ type: 'strike', id: e.id, x: e.x, z: e.z, facing: e.facing });
-      if (inArc(e.x, e.z, e.facing, cfg.strikeRange, cfg.strikeArc, p.x, p.z, SIM.player.radius)) {
-        hurtPlayer(state, e.stats.damage, e.x, e.z);
-      }
+      hurtPlayersWhere(state, (p) => inArc(e.x, e.z, e.facing, cfg.strikeRange, cfg.strikeArc, p.x, p.z, SIM.player.radius), e.stats.damage, e.x, e.z);
       return { mvx: 0, mvz: 0 };
     }
     case 'recover':
@@ -125,7 +124,7 @@ function shadeBrain(state, e, cfg, dx, dz, dist, ctx) {
 }
 
 function archerBrain(state, e, cfg, dx, dz, dist, ctx) {
-  const p = state.player;
+  const p = ctx.target;
   switch (e.mode) {
     case 'chase': {
       e.facing = facingOf(dx, dz);
@@ -183,7 +182,7 @@ function furyBrain(state, e, cfg, dx, dz, dist, ctx) {
     case 'chase': {
       e.facing = facingOf(dx, dz);
       // Elle n'annonce sa charge que si la voie est libre jusqu'au héros
-      if (dist <= cfg.chargeRange && hasClearPath(state.dungeon, e.x, e.z, state.player.x, state.player.z, cfg.radius)) {
+      if (dist <= cfg.chargeRange && hasClearPath(state.dungeon, e.x, e.z, ctx.target.x, ctx.target.z, cfg.radius)) {
         e.mode = 'windup';
         e.timer = ticks(e.stats.windup);
         e.aimX = dx / (dist || 1);
@@ -220,9 +219,9 @@ function furyBrain(state, e, cfg, dx, dz, dist, ctx) {
 // Pendant la charge : touche le héros au contact (une fois par charge, sauf s'il
 // esquive à travers), et s'écrase si un mur l'arrête (étourdie plus longtemps)
 function resolveCharge(state, e, cfg, moved, wanted) {
-  const p = state.player;
-  if (!e.chargeHit && Math.hypot(p.x - e.x, p.z - e.z) < cfg.radius + SIM.player.radius + 0.1) {
-    if (hurtPlayer(state, e.stats.damage, e.x, e.z)) e.chargeHit = true;
+  if (!e.chargeHit) {
+    const near = (p) => Math.hypot(p.x - e.x, p.z - e.z) < cfg.radius + SIM.player.radius + 0.1;
+    if (hurtPlayersWhere(state, near, e.stats.damage, e.x, e.z)) e.chargeHit = true;
   }
   if (wanted > 0 && moved < wanted * 0.5) {
     e.mode = 'recover';
@@ -235,7 +234,7 @@ function resolveCharge(state, e, cfg, moved, wanted) {
 // corps de l'ennemi, sinon vers la case voisine la plus proche du héros en distance
 // de marche (il contourne ainsi piliers et angles au lieu de s'y cogner)
 export function approachDir(state, e, cfg, ctx) {
-  const p = state.player;
+  const p = ctx.target;
   const dx = p.x - e.x;
   const dz = p.z - e.z;
   const dist = Math.hypot(dx, dz) || 1;
@@ -266,7 +265,6 @@ export function approachDir(state, e, cfg, ctx) {
 // donc jamais faire entrer un ennemi dans un mur, même coincé dans un angle.
 function separate(state) {
   const list = state.enemies;
-  const p = state.player;
   const push = list.map(() => ({ x: 0, z: 0 }));
   for (let i = 0; i < list.length; i++) {
     const a = list[i];
@@ -287,21 +285,24 @@ function separate(state) {
       push[j].x += dx * k;
       push[j].z += dz * k;
     }
-    if (p.dashTimer > 0) continue;
-    const min = ra + SIM.player.radius;
-    const dx = a.x - p.x;
-    const dz = a.z - p.z;
-    const d = Math.hypot(dx, dz);
-    if (d < min && d > 0) {
-      if (a.boss || a.part) {
-        // Un boss est trop lourd pour être poussé : c'est le héros qui recule
-        const pos = { x: p.x, z: p.z };
-        moveCircle(state.dungeon, pos, (-dx / d) * (min - d), (-dz / d) * (min - d), SIM.player.radius);
-        p.x = pos.x;
-        p.z = pos.z;
-      } else {
-        push[i].x += (dx / d) * (min - d);
-        push[i].z += (dz / d) * (min - d);
+    // Un héros à terre ou hors jeu ne bouscule personne
+    for (const p of state.players) {
+      if (p.dashTimer > 0 || !isActive(p)) continue;
+      const min = ra + SIM.player.radius;
+      const dx = a.x - p.x;
+      const dz = a.z - p.z;
+      const d = Math.hypot(dx, dz);
+      if (d < min && d > 0) {
+        if (a.boss || a.part) {
+          // Un boss est trop lourd pour être poussé : c'est le héros qui recule
+          const pos = { x: p.x, z: p.z };
+          moveCircle(state.dungeon, pos, (-dx / d) * (min - d), (-dz / d) * (min - d), SIM.player.radius);
+          p.x = pos.x;
+          p.z = pos.z;
+        } else {
+          push[i].x += (dx / d) * (min - d);
+          push[i].z += (dz / d) * (min - d);
+        }
       }
     }
   }

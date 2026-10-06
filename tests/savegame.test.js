@@ -49,7 +49,7 @@ test('la sauvegarde ne garde pas les événements du dernier pas, et résume la 
   const s = createGameState('resume', { cls: 'mystic' });
   s.events.push({ type: 'hit' });
   assert.deepEqual(JSON.parse(serializeRun(s)).events, []);
-  assert.deepEqual(runSummary(s), { floor: 1, cls: 'mystic', hp: s.player.hp, maxHp: s.player.maxHp, seed: 'resume' });
+  assert.deepEqual(runSummary(s), { floor: 1, cls: 'mystic', hp: s.players[0].hp, maxHp: s.players[0].maxHp, seed: 'resume', coop: false });
   // Pendant l'écran de Charon, la partie se reprend aussi
   s.status = 'choosing';
   assert.ok(parseRun(serializeRun(s)));
