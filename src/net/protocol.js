@@ -115,6 +115,23 @@ export function roomCode(random) {
   return c;
 }
 
+// Lien d'invitation (QR code, partage) : l'adresse du jeu avec ?join=CODE.
+// pageUrl : adresse actuelle (on garde les autres réglages, comme ?server= en test)
+export function joinLink(pageUrl, code) {
+  const url = new URL(pageUrl);
+  url.searchParams.delete('seed');
+  url.searchParams.delete('coop');
+  url.searchParams.set('join', code);
+  url.hash = '';
+  return url.toString();
+}
+
+// Code de salon lu dans une adresse (?join=abcd), ou '' s'il n'y en a pas de valide
+export function codeFromLink(search) {
+  const code = String(new URLSearchParams(search).get('join') || '').toUpperCase();
+  return code.length === 4 && [...code].every((c) => ROOM_CODE_LETTERS.includes(c)) ? code : '';
+}
+
 // Pseudo affiché dans le salon : nettoyé et raccourci
 export function cleanPlayerName(name) {
   const n = typeof name === 'string' ? name.replace(/[^\p{L}\p{N} _-]/gu, '').trim().slice(0, 20) : '';

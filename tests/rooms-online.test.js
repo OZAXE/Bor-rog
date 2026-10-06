@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRooms } from '../server/rooms.js';
-import { packIntent, unpackIntent, encode, fixedOf, snapshotOf, stateFromSnapshot, roomCode, cleanPlayerName, ROOM_CODE_LETTERS } from '../src/net/protocol.js';
+import { packIntent, unpackIntent, encode, fixedOf, snapshotOf, stateFromSnapshot, roomCode, cleanPlayerName, ROOM_CODE_LETTERS, joinLink, codeFromLink } from '../src/net/protocol.js';
 import { createGameState } from '../src/state/gameState.js';
 import { stepGame } from '../src/systems/simulation.js';
 import { TILE } from '../src/dungeon/tiles.js';
@@ -58,6 +58,18 @@ test('protocole : intentions compactes, code de salon, pseudo nettoyé', () => {
   assert.ok(!/[ILO]/.test(ROOM_CODE_LETTERS));
   assert.equal(cleanPlayerName('<script>Zag</script>'), 'scriptZagscript');
   assert.equal(cleanPlayerName(''), 'Invité');
+});
+
+test('lien d’invitation (QR code) : l’adresse du jeu avec le code, relue à l’arrivée', () => {
+  const link = joinLink('https://ozaxe.github.io/Bor-rog/?seed=abc&coop=bot#x', 'RTZB');
+  assert.equal(link, 'https://ozaxe.github.io/Bor-rog/?join=RTZB');
+  // Les réglages de test (serveur local) sont gardés
+  assert.equal(joinLink('http://localhost:4173/Bor-rog/?server=http%3A%2F%2Flocalhost%3A10000', 'ABCD'), 'http://localhost:4173/Bor-rog/?server=http%3A%2F%2Flocalhost%3A10000&join=ABCD');
+  assert.equal(codeFromLink(new URL(link).search), 'RTZB');
+  assert.equal(codeFromLink('?join=rtzb'), 'RTZB');
+  assert.equal(codeFromLink('?join=RT1B'), '', 'caractère interdit');
+  assert.equal(codeFromLink('?join=RTZBX'), '');
+  assert.equal(codeFromLink('?seed=x'), '');
 });
 
 test('instantané : l’état reconstruit côté navigateur a la même forme que la simulation', () => {

@@ -4,12 +4,15 @@
 
 import { createSession } from '../net/client.js';
 import { CLASSES } from '../systems/classes.js';
+import { joinLink } from '../net/protocol.js';
+import qrcode from 'qrcode-generator';
 
 // info() : { name, cls, meta } du joueur ; onStart(message start, session) : la partie commence
 export function createLobby({ root, serverUrl, info, onStart, onOpen = () => {} }) {
   const el = (sel) => root.querySelector(sel);
   let session = null;
   let busy = false;
+  let invitedCode = '';
 
   function status(text) {
     el('.lobby-status').textContent = text;
@@ -24,6 +27,13 @@ export function createLobby({ root, serverUrl, info, onStart, onOpen = () => {} 
     if (msg.t === 'lobby') {
       show('room');
       el('.room-code').textContent = msg.code;
+      // Invitation (QR code + lien) tant que la place est libre
+      el('.room-invite').hidden = msg.players.length >= 2;
+      if (msg.code !== invitedCode) {
+        invitedCode = msg.code;
+        el('.room-qr').innerHTML = qrSvg(joinLink(window.location.href, msg.code));
+        el('.share-msg').textContent = '';
+      }
       el('.room-players').innerHTML = msg.players
         .map((p, i) => `<li>${escapeHtml(p.name)} · ${CLASSES[p.cls]?.name || ''}${i === 0 ? ' (crée le salon)' : ''}</li>`)
         .join('');
@@ -89,6 +99,21 @@ export function createLobby({ root, serverUrl, info, onStart, onOpen = () => {} 
     if (codeInput.value.length !== 4) return status('Le code fait 4 lettres.');
     run((s) => s.send({ t: 'join', code: codeInput.value, ...info() }));
   });
+  // Partager le lien : menu de partage du téléphone, sinon copie dans le presse-papiers
+  el('.btn-share-room').addEventListener('click', async () => {
+    const url = joinLink(window.location.href, invitedCode);
+    const msg = el('.share-msg');
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Bor-rog', text: `Rejoins-moi dans les Enfers ! Salon ${invitedCode}`, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      msg.textContent = 'Lien copié.';
+    } catch {
+      msg.textContent = url; // partage annulé ou refusé : le lien reste visible
+    }
+  });
   el('.btn-start-room').addEventListener('click', () => session && session.send({ t: 'start' }));
   el('.btn-close-lobby').addEventListener('click', () => {
     if (session) session.leave();
@@ -105,7 +130,21 @@ export function createLobby({ root, serverUrl, info, onStart, onOpen = () => {} 
       onOpen();
     },
     isOpen: () => !root.classList.contains('hidden'),
+    // Arrivée par un lien d'invitation (QR code scanné) : on rejoint directement
+    joinFromLink(code) {
+      this.open();
+      codeInput.value = code;
+      run((s) => s.send({ t: 'join', code, ...info() }));
+    },
   };
+}
+
+// QR code en SVG (net à toutes les tailles, sans image à charger)
+function qrSvg(text) {
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
 }
 
 function escapeHtml(s) {
