@@ -27,7 +27,10 @@ export function healCost(p) {
 export function startDescent(state) {
   state.status = 'choosing';
   // free : relances gratuites restantes (Ami du passeur, arbre permanent)
-  for (const p of state.players) p.offer = { boons: drawBoons(state, p), rerolls: 0, free: rankOf(p.meta, 'freeReroll') };
+  for (const p of state.players) {
+    if (p.left) continue; // joueur parti (partie en ligne) : il ne choisit plus
+    p.offer = { boons: drawBoons(state, p), rerolls: 0, free: rankOf(p.meta, 'freeReroll') };
+  }
   state.events.push({ type: 'descentOffer' });
 }
 

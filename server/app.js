@@ -27,7 +27,7 @@ import {
 } from './auth.js';
 
 // Version des routes : /health l'affiche (on voit ainsi quel code tourne sur Render)
-export const API_VERSION = 1;
+export const API_VERSION = 2; // 2 : parties en ligne (WebSocket /play)
 const SESSION_DAYS = 90;
 const MAX_BODY = 32 * 1024; // un profil fait quelques Ko
 const LOGIN_FAILS = 5; // essais ratés par minute et par adresse

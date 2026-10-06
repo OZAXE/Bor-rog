@@ -263,6 +263,8 @@ export function createAccount({ root, conflictRoot, serverUrl, profile, save, on
   render();
   return {
     start: refresh,
+    // Pseudo du compte (vide sans compte) : affiché dans les salons en ligne
+    name: () => account?.name || '',
     // Le profil vient d'être enregistré dans le navigateur : à envoyer en ligne
     changed() {
       if (!account) return;
