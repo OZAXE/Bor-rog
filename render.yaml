@@ -1,0 +1,20 @@
+# Configuration Render (« Blueprint ») du serveur de Bor-rog.
+# Le jeu lui-même reste sur GitHub Pages : seul le dossier server/ est déployé ici.
+# Render relit ce fichier à chaque modification poussée sur main.
+services:
+  - type: web
+    name: bor-rog-server
+    runtime: node
+    plan: free # s'endort après 15 min sans visite, ~1 min pour se réveiller
+    region: frankfurt # à côté de la base Neon (Francfort)
+    rootDir: server # seuls les changements dans server/ relancent un déploiement
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Adresse de la base Neon : secret saisi dans le tableau de bord Render,
+      # jamais écrit dans le dépôt
+      - key: DATABASE_URL
+        sync: false
