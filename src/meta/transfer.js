@@ -20,7 +20,7 @@ export function encodeProfile(profile) {
     a: ATTR_IDS.map((id) => profile.attrs[id]), // niveaux d'attributs, dans l'ordre d'ATTR_IDS
     t: profile.talents,
     c: profile.cls,
-    b: profile.builds,
+    b: profile.characters, // autres personnages (version 4) ; builds de talents en version 3
     s: [s.runs, s.victories, s.bestFloor, s.totalShadows],
     k: s.bosses, // boss vaincus (déblocage des classes)
   });
@@ -53,6 +53,7 @@ export function decodeProfile(code) {
       talents: raw.t,
       cls: raw.c,
       builds: raw.b,
+      characters: raw.b,
       stats: { runs: st[0], victories: st[1], bestFloor: st[2], totalShadows: st[3], bosses: raw.k },
     }),
   };

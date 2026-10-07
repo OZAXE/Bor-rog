@@ -76,6 +76,7 @@ test("un talent de classe ne s'apprend qu'avec sa classe, et ses paliers suivent
   assert.equal(talentBlocker(p, 'bulwark'), 'palier', 'palier 3 fermé avant 18');
   p.stats.bosses.cerberus = 1;
   assert.ok(selectClass(p, 'huntress'));
+  p.attrs = { ares: 10, demeter: 1, hermes: 1, charon: 1 }; // la Chasseresse a ses propres niveaux
   assert.equal(talentBlocker(p, 'parry'), 'classe');
   assert.ok(learn(p, 'venom'));
   // Un build de Guerrier imposé à la Chasseresse est nettoyé

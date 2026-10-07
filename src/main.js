@@ -24,7 +24,7 @@ import { SIM } from './systems/simConfig.js';
 import { ZONE_THEMES } from './render/zoneThemes.js';
 import { zoneOf, FLOORS_PER_ZONE } from './dungeon/zones.js';
 import { createInput } from './controls/input.js';
-import { recordRun, metaOf, shadowsEarned, selectClass } from './meta/profile.js';
+import { recordRun, metaOf, shadowsEarned, selectClass, characterOf, characterLevel } from './meta/profile.js';
 import { loadProfile, saveProfile, saveRun, loadRunText, clearRun } from './ui/storage.js';
 import { createAccount } from './ui/account.js';
 import { serializeRun, parseRun, runSummary } from './state/savegame.js';
@@ -57,11 +57,11 @@ let seed = params.get('seed') || randomSeed();
 const profile = { current: loadProfile() };
 // Chaque partie démarre avec les améliorations permanentes achetées au Seuil
 // Co-op de test (étape 8c) : ?coop=bot ajoute un partenaire contrôlé par l'ordinateur.
-// Il prend une autre classe que la tienne, avec tes attributs et ton build rangé de cette classe.
+// Il prend une autre classe que la tienne : ton personnage de cette classe (niveaux et talents).
 const COOP_BOT = params.get('coop') === 'bot';
 function botPlayer() {
   const cls = profile.current.cls === 'huntress' ? 'warrior' : 'huntress';
-  return { meta: { attrs: profile.current.attrs, talents: profile.current.builds[cls] || {} }, cls };
+  return { meta: characterOf(profile.current, cls), cls };
 }
 const newState = (s) => {
   const me = { meta: metaOf(profile.current), cls: profile.current.cls };
@@ -510,7 +510,11 @@ for (const id of CLASS_IDS) {
   startCards.set(id, b);
 }
 function renderStartClasses() {
-  for (const [id, b] of startCards) b.classList.toggle('on', id === profile.current.cls);
+  for (const [id, b] of startCards) {
+    b.classList.toggle('on', id === profile.current.cls);
+    // Chaque classe est un personnage qu'on fait progresser : son niveau est affiché
+    b.querySelector('span').textContent = `Niveau ${characterLevel(profile.current, id) + 1} · ${CLASSES[id].weaponName}`;
+  }
 }
 renderStartClasses();
 // Lien d'invitation (?join=CODE, QR code scanné) : on rejoint le salon tout de suite.
