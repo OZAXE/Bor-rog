@@ -14,6 +14,16 @@ import { updateHazards } from './hazards.js';
 import { startDescent, updateDescent } from './descent.js';
 import { TILE, tileAt } from '../dungeon/tiles.js';
 import { isActive } from '../state/gameState.js';
+import { inRoom } from './rooms.js';
+
+// Escalier gardé : un ennemi encore debout dans la salle de l'escalier (on ne fuit pas
+// un combat en descendant). Renvoie cette salle, ou null. Les ennemis restés ailleurs
+// dans l'étage ne comptent pas.
+export function stairsGuard(state, c, r) {
+  const room = state.dungeon.rooms.find((rm) => c >= rm.x && c < rm.x + rm.w && r >= rm.y && r < rm.y + rm.h);
+  if (!room) return null;
+  return state.enemies.some((e) => e.hp > 0 && inRoom(room, e.x, e.z)) ? room : null;
+}
 
 export const STEP = 1 / SIM.tickRate;
 
@@ -44,7 +54,8 @@ export function stepGame(state, rawIntents) {
   checkStairs(state);
 }
 
-// Un héros debout sur le centre de l'escalier ouvre l'écran de Charon (puis la descente)
+// Un héros debout sur le centre de l'escalier ouvre l'écran de Charon (puis la descente),
+// à condition que la salle de l'escalier soit vide d'ennemis
 function checkStairs(state) {
   for (const p of state.players) {
     if (!isActive(p)) continue;
@@ -54,6 +65,15 @@ function checkStairs(state) {
     const dx = p.x - (c + 0.5);
     const dz = p.z - (r + 0.5);
     if (dx * dx + dz * dz > SIM.stairsRadius * SIM.stairsRadius) continue;
+    const guard = stairsGuard(state, c, r);
+    if (guard) {
+      // Des ennemis sont revenus dans une salle déjà purifiée : elle se scelle à nouveau
+      // (grilles, compteur d'ennemis), comme un combat normal, au pas suivant
+      if (!state.lock) guard.cleared = false;
+      // Rappel au joueur, une fois par seconde tant qu'il attend sur l'escalier
+      if (state.tick % SIM.tickRate === 0) state.events.push({ type: 'stairsBlocked', x: p.x, z: p.z, player: p.id });
+      return;
+    }
     startDescent(state);
     return;
   }

@@ -916,13 +916,14 @@ body {
 }
 
 /* Choix de la classe */
-#threshold .classes {
+#threshold .classes,
+#start-classes {
   display: flex;
   gap: 8px;
   width: min(100%, 640px);
 }
 
-#threshold .class-card {
+#threshold .class-card, #start-classes .class-card {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -935,26 +936,26 @@ body {
   cursor: pointer;
 }
 
-#threshold .class-card b {
+#threshold .class-card, #start-classes .class-card b {
   font-size: 15px;
   color: var(--accent);
 }
 
-#threshold .class-card span {
+#threshold .class-card, #start-classes .class-card span {
   color: var(--ombre);
 }
 
-#threshold .class-card small {
+#threshold .class-card, #start-classes .class-card small {
   opacity: 0.75;
 }
 
-#threshold .class-card.on {
+#threshold .class-card, #start-classes .class-card.on {
   border-color: var(--spectral);
   background: linear-gradient(#173328, #0b0a14);
   box-shadow: 0 0 14px rgba(47, 255, 134, 0.25);
 }
 
-#threshold .class-card:disabled {
+#threshold .class-card, #start-classes .class-card:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -1610,5 +1611,17 @@ body {
   #lobby .btn-start-room {
     grid-column: 1 / -1;
     justify-self: center;
+  }
+}
+
+/* Écran titre : choix de la classe avant la première descente */
+#start-classes {
+  margin: 4px auto 0;
+  width: min(92vw, 560px);
+}
+
+@media (max-height: 500px) {
+  #start-classes .class-card small {
+    display: none; /* téléphone en paysage : le nom et l'arme suffisent */
   }
 }

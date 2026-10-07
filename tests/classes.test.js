@@ -178,16 +178,12 @@ test('un boss vaincu est noté dans la partie, puis compté dans le profil', () 
   assert.equal(p.stats.bosses.cerberus, 1);
 });
 
-test('déblocage : Chasseresse après Cerbère, Mystique après l\'Hydre', () => {
+test('les trois classes sont jouables dès le départ', () => {
   const p = newProfile();
-  assert.ok(classUnlocked(p, 'warrior'));
-  assert.equal(classUnlocked(p, 'huntress'), false);
-  assert.equal(selectClass(p, 'huntress'), false);
-  assert.equal(p.cls, 'warrior');
-  recordRun(p, { shadows: 0, floorIndex: 3, status: 'dead', bossesDefeated: ['cerberus'] });
-  assert.ok(classUnlocked(p, 'huntress'));
-  assert.equal(classUnlocked(p, 'mystic'), false);
+  for (const id of CLASS_IDS) assert.ok(classUnlocked(p, id), id);
   assert.equal(classUnlocked(p, 'inconnue'), false);
+  assert.ok(selectClass(p, 'mystic'));
+  assert.equal(p.cls, 'mystic');
   for (const id of CLASS_IDS) assert.equal(typeof CLASSES[id].text, 'string');
 });
 
@@ -208,16 +204,16 @@ test('un build par classe : changer de classe range le build et le retrouve au r
   assert.equal(p.attrs.ares, 2, 'les attributs sont communs');
 });
 
-test('profil d\'avant les classes : boss réputés vaincus selon le meilleur étage', () => {
+test('profil d\'avant les classes : boss réputés vaincus selon le meilleur étage ; classe gardée', () => {
   const p = sanitizeProfile({ version: 2, shadows: 5, stats: { runs: 3, bestFloor: 5 } });
   assert.equal(p.cls, 'warrior');
-  assert.ok(classUnlocked(p, 'huntress'));
-  assert.equal(classUnlocked(p, 'mystic'), false);
-  // Classe verrouillée dans une sauvegarde trafiquée : retour au Guerrier, build rangé
-  const q = sanitizeProfile({ version: 3, cls: 'mystic', attrs: { ares: 3 }, talents: { swift: 1 }, stats: { bosses: { cerberus: 1 } } });
-  assert.equal(q.cls, 'warrior');
-  assert.deepEqual(q.builds.mystic, { swift: 1 });
-  assert.deepEqual(q.talents, {});
+  assert.equal(p.stats.bosses.cerberus, 1);
+  assert.equal(p.stats.bosses.hydra, 0);
+  // Une classe choisie dans une sauvegarde est gardée (plus de verrou), son build aussi
+  const q = sanitizeProfile({ version: 3, cls: 'mystic', attrs: { ares: 3 }, talents: { swift: 1 }, stats: { bosses: {} } });
+  assert.equal(q.cls, 'mystic');
+  assert.deepEqual(q.talents, { swift: 1 });
+  assert.equal(sanitizeProfile({ version: 3, cls: 'dieu' }).cls, 'warrior');
 });
 
 test("code d'export : classe, builds et boss vaincus voyagent avec la progression", () => {
