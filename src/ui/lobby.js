@@ -130,6 +130,8 @@ export function createLobby({ root, serverUrl, info, onStart, onOpen = () => {} 
       onOpen();
     },
     isOpen: () => !root.classList.contains('hidden'),
+    // Profil envoyé au serveur (création, arrivée, « Prêt » entre deux descentes)
+    info,
     // Arrivée par un lien d'invitation (QR code scanné) : on rejoint directement
     joinFromLink(code) {
       this.open();

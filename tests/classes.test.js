@@ -213,6 +213,11 @@ test('un personnage par classe : niveaux et talents propres, Ombres communes', (
   assert.equal(JSON.stringify([p.attrs, p.talents]), huntress, 'retrouvée telle quelle');
   // Ombres investies : tous personnages confondus
   assert.equal(investedShadows(p), 40 + 40 + 40);
+  // Un personnage jamais monté n'est pas rangé : le profil garde la forme d'une relecture
+  assert.ok(selectClass(p, 'mystic'));
+  assert.ok(selectClass(p, 'warrior'));
+  assert.equal(p.characters.mystic, undefined);
+  assert.deepEqual(sanitizeProfile(JSON.parse(JSON.stringify(p))), p);
 });
 
 test('ancien profil (niveaux communs) : chaque personnage garde les niveaux, rien n’est perdu', () => {

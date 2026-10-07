@@ -441,14 +441,18 @@ function endOfRun() {
   clearRun(); // la descente est finie : plus rien à reprendre
   lastEarned = recordRun(profile.current, state);
   storeProfile();
-  // Partie en ligne finie : le serveur ferme le salon ; on se déconnecte
-  if (net && state.status !== 'playing' && state.status !== 'choosing') leaveOnline();
+  // Partie en ligne finie : le duo reste ensemble (le serveur renvoie le salon, cf. onlineMessage)
 }
 const threshold = createThreshold({
   root: $('threshold'),
   profile,
   onChange: () => storeProfile(),
   onDescend: (sameSeed) => {
+    // En duo : « Prêt » ; la descente part quand l'allié l'est aussi
+    if (duo) {
+      sendReady();
+      return;
+    }
     threshold.close();
     restart(sameSeed ? seed : randomSeed());
     setPlaying(true);
@@ -470,6 +474,8 @@ const account = createAccount({
 function storeProfile() {
   saveProfile(profile.current);
   account.changed();
+  // En duo, déjà prêt : le serveur reçoit le profil à jour (talent pris après coup)
+  if (duo && duo.meReady) sendReady();
 }
 account.start();
 
@@ -527,16 +533,34 @@ if (invitedTo) {
   startScreen.classList.add('hidden');
   lobby.joinFromLink(invitedTo);
 }
-$('threshold').querySelector('.btn-online').addEventListener('click', openLobby);
+$('threshold').querySelector('.btn-online').addEventListener('click', () => {
+  // En duo, ce bouton devient « Quitter le duo » : retour au jeu en solo
+  if (duo) {
+    leaveOnline();
+    threshold.setDuo(null);
+    return;
+  }
+  openLobby();
+});
 $('lobby').querySelector('.btn-close-lobby').addEventListener('click', () => {
   // Retour : au Seuil après une partie, sinon à l'écran titre
   if (started) openThreshold();
   else startScreen.classList.remove('hidden');
 });
 
+// Duo en ligne entre deux descentes : { ally, allyReady, meReady } (null hors duo)
+let duo = null;
+function sendReady() {
+  session.send({ t: 'ready', ...lobby.info() });
+  duo.meReady = true;
+  threshold.setDuo(duo);
+}
+
 function startOnline(start, s) {
   abandonSavedRun();
   clearRun();
+  duo = null;
+  threshold.setDuo(null);
   session = s;
   session.handler = onlineMessage;
   session.statusHandler = (text) => text && showBanner(text, 'danger');
@@ -545,11 +569,14 @@ function startOnline(start, s) {
     showBanner('Connexion perdue', 'danger');
     endOfRun();
     leaveOnline();
+    threshold.setDuo(null);
     openThreshold();
   };
   myIndex = start.you;
   net = createNetGame(start, (msg) => session.send(msg));
-  $('btn-retry').hidden = true; // « même graine » n'a pas de sens pour une partie en ligne
+  net.run = start.run;
+  // « même graine » et « nouvelle descente » (solo) n'ont pas de sens en duo : on passe par le Seuil
+  for (const id of ['btn-retry', 'btn-new', 'btn-victory-new']) $(id).hidden = true;
   threshold.close();
   adoptState(stateFromSnapshot(start.fixed, start.snap));
   if (DEVICE.isMobile) enterFullscreen();
@@ -558,14 +585,41 @@ function startOnline(start, s) {
 
 function onlineMessage(msg) {
   if (!net) return;
+  if (msg.t === 'start' && msg.run !== net.run) {
+    // Descente suivante du duo
+    startOnline(msg, session);
+    return;
+  }
   if (msg.t === 'start') {
     // Retour après une coupure : on reprend l'affichage depuis l'état actuel du serveur
     net = createNetGame(msg, (m) => session.send(m));
+    net.run = msg.run;
     showBanner('De retour dans la partie', 'calm');
     return;
   }
+  if (msg.t === 'lobby') {
+    // Fin de descente : le duo reste ensemble au Seuil
+    myIndex = msg.you;
+    if (msg.players.length < 2) {
+      showBanner('Ton allié a quitté le duo', 'danger');
+      leaveOnline();
+      threshold.setDuo(null);
+      return;
+    }
+    const ally = msg.players.find((q, i) => i !== msg.you);
+    duo = { ally: ally.name, allyReady: ally.ready, meReady: msg.players[msg.you].ready };
+    threshold.setDuo(duo);
+    return;
+  }
   if (msg.t === 'left') showBanner(msg.name === 'Invité' ? 'Ton allié a quitté la partie' : `${msg.name} a quitté la partie`, 'danger');
-  else if (msg.t === 'error') showBanner(msg.message, 'danger');
+  else if (msg.t === 'error') {
+    showBanner(msg.message, 'danger');
+    // Entre deux descentes, une erreur (retour impossible, salon fermé) met fin au duo
+    if (duo) {
+      leaveOnline();
+      threshold.setDuo(null);
+    }
+  }
   else net.receive(msg);
 }
 
@@ -573,6 +627,8 @@ function leaveOnline() {
   if (session) session.leave();
   session = null;
   net = null;
+  duo = null;
+  for (const id of ['btn-new', 'btn-victory-new']) $(id).hidden = false;
 }
 
 function openThreshold() {

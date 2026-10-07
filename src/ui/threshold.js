@@ -254,7 +254,26 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
     if (!root.classList.contains('hidden')) drawLinks();
   });
 
+  // Duo en ligne entre deux descentes : « Descendre » devient « Prêt » ; la descente
+  // part quand les deux joueurs sont prêts (cf. server/rooms.js). duo = null en solo.
+  function renderDuo(duo) {
+    const info = el('.duo-info');
+    const descend = el('.btn-descend');
+    info.hidden = !duo;
+    el('.btn-same-seed').hidden = !!duo;
+    el('.btn-online').textContent = duo ? 'Quitter le duo' : 'Jouer à deux';
+    if (!duo) {
+      descend.textContent = 'Descendre';
+      descend.disabled = false;
+      return;
+    }
+    info.textContent = `En duo avec ${duo.ally} · ${duo.allyReady ? 'prêt à descendre' : 'au Seuil'}`;
+    descend.textContent = duo.meReady ? 'En attente de ton allié…' : 'Prêt';
+    descend.disabled = duo.meReady;
+  }
+
   return {
+    setDuo: renderDuo,
     // gained : Ombres de la partie qui vient de finir (0 = pas de message)
     open(gained = 0) {
       el('.gained').textContent = gained ? `+${gained} Ombres rapportées de ta descente` : '';

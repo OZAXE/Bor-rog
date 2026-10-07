@@ -38,6 +38,10 @@ export function newProfile() {
   };
 }
 
+function blankCharacter(attrs, talents) {
+  return ATTR_IDS.every((id) => (attrs[id] ?? 1) === 1) && Object.keys(talents).length === 0;
+}
+
 function freshAttrs() {
   return Object.fromEntries(ATTR_IDS.map((id) => [id, 1]));
 }
@@ -71,7 +75,9 @@ export function classUnlocked(profile, cls) {
 // Change de personnage : l'ancien est rangé (niveaux et talents), le nouveau ressorti
 export function selectClass(profile, cls) {
   if (!classUnlocked(profile, cls) || cls === profile.cls) return false;
-  profile.characters[profile.cls] = { attrs: profile.attrs, talents: profile.talents };
+  // Un personnage jamais monté n'est pas rangé (même forme que relu par sanitizeProfile)
+  if (blankCharacter(profile.attrs, profile.talents)) delete profile.characters[profile.cls];
+  else profile.characters[profile.cls] = { attrs: profile.attrs, talents: profile.talents };
   const next = characterOf(profile, cls);
   profile.attrs = next.attrs;
   profile.talents = next.talents;
@@ -195,8 +201,7 @@ export function sanitizeProfile(raw) {
       if (!src || typeof src !== 'object') continue;
       const m = cleanMeta({ attrs: src.attrs, talents: src.talents, cls: c });
       // Un personnage jamais monté n'est pas rangé (forme unique d'un profil neuf)
-      const blank = ATTR_IDS.every((id) => m.attrs[id] === 1) && Object.keys(m.talents).length === 0;
-      if (!blank) p.characters[c] = { attrs: m.attrs, talents: m.talents };
+      if (!blankCharacter(m.attrs, m.talents)) p.characters[c] = { attrs: m.attrs, talents: m.talents };
     }
   }
   const st = raw.stats || {};
