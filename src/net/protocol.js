@@ -9,13 +9,14 @@
 //   { t: 'create', name, cls, meta }       créer un salon
 //   { t: 'join', code, name, cls, meta }   rejoindre un salon avec son code
 //   { t: 'start' }                         lancer la descente (créateur du salon)
+//   { t: 'ready', name, cls, meta }        entre deux descentes : prêt à repartir (profil à jour)
 //   { t: 'in', s, l }                      intentions : s = numéro de la première, l = liste compacte
 //   { t: 'act', choice, shop }             écran de Charon : choix d'un bienfait, achat
 //   { t: 'rejoin', code, token }           revenir dans la partie après une coupure
 //   { t: 'leave' }                         quitter le salon ou la partie
 // Messages serveur -> joueur :
-//   { t: 'lobby', code, you, host, players: [{ name, cls }], token }
-//   { t: 'start', you, fixed, snap }       début de partie (ou retour après coupure)
+//   { t: 'lobby', code, you, host, players: [{ name, cls, ready }], token, between, run }
+//   { t: 'start', you, run, fixed, snap }  début de descente (ou retour après coupure : même run)
 //   { t: 'floor', fixed }                  nouvel étage (décor)
 //   { t: 'snap', ...instantané, ack, ev }  état du jeu ; ack = dernière intention traitée
 //   { t: 'left', name }                    l'allié a quitté la partie

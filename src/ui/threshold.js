@@ -4,7 +4,7 @@
 // un arbre dessiné (nœuds + liens). Les règles sont dans src/meta/ (tree.js, profile.js).
 
 import { ATTRS, ATTR_IDS, ATTR_MAX, TALENTS, TALENT_IDS, TIER_LEVELS, CLASS_TIER_LEVELS, attrLevel, rankOf, talentBlocker, talentCost, talentPoints } from '../meta/tree.js';
-import { buyLevel, levelCost, levelBlocker, learn, freePoints, spentPoints, resetTalents, investedShadows } from '../meta/profile.js';
+import { buyLevel, levelCost, levelBlocker, learn, freePoints, spentPoints, resetTalents, investedShadows, characterLevel } from '../meta/profile.js';
 import { encodeProfile, decodeProfile } from '../meta/transfer.js';
 import { classUnlocked, selectClass } from '../meta/profile.js';
 import { CLASSES, CLASS_IDS } from '../systems/classes.js';
@@ -148,8 +148,9 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
     for (const [id, b] of classCards) {
       const c = CLASSES[id];
       const open = classUnlocked(p, id);
+      // Chaque classe est un personnage : son niveau (niveaux d'attributs gagnés) est affiché
       b.innerHTML = open
-        ? `<b>${c.name}</b><span>${c.weaponName}</span><small>${c.text}</small>`
+        ? `<b>${c.name}</b><span>Niveau ${characterLevel(p, id) + 1} · ${c.weaponName}</span><small>${c.text}</small>`
         : `<b>${c.name}</b><span>Verrouillée</span><small>Bats ${BOSS_NAMES[c.unlockBoss]} pour la débloquer</small>`;
       b.disabled = !open;
       b.classList.toggle('on', id === p.cls);
@@ -253,7 +254,26 @@ export function createThreshold({ root, profile, onChange, onDescend }) {
     if (!root.classList.contains('hidden')) drawLinks();
   });
 
+  // Duo en ligne entre deux descentes : « Descendre » devient « Prêt » ; la descente
+  // part quand les deux joueurs sont prêts (cf. server/rooms.js). duo = null en solo.
+  function renderDuo(duo) {
+    const info = el('.duo-info');
+    const descend = el('.btn-descend');
+    info.hidden = !duo;
+    el('.btn-same-seed').hidden = !!duo;
+    el('.btn-online').textContent = duo ? 'Quitter le duo' : 'Jouer à deux';
+    if (!duo) {
+      descend.textContent = 'Descendre';
+      descend.disabled = false;
+      return;
+    }
+    info.textContent = `En duo avec ${duo.ally} · ${duo.allyReady ? 'prêt à descendre' : 'au Seuil'}`;
+    descend.textContent = duo.meReady ? 'En attente de ton allié…' : 'Prêt';
+    descend.disabled = duo.meReady;
+  }
+
   return {
+    setDuo: renderDuo,
     // gained : Ombres de la partie qui vient de finir (0 = pas de message)
     open(gained = 0) {
       el('.gained').textContent = gained ? `+${gained} Ombres rapportées de ta descente` : '';

@@ -18,20 +18,44 @@ import {
 } from './tree.js';
 import { CLASSES, CLASS_IDS, classOf } from '../systems/classes.js';
 
-// Version 3 : classes (version 2 : attributs + talents ; version 1 : arbre simple)
-export const PROFILE_VERSION = 3;
+// Version 4 : un personnage par classe, chacun avec ses niveaux et ses talents
+// (version 3 : classes à attributs communs ; 2 : attributs + talents ; 1 : arbre simple)
+export const PROFILE_VERSION = 4;
 const BOSS_IDS = ['cerberus', 'hydra', 'thanatos'];
 
+// Chaque classe est un personnage qu'on fait progresser : ses niveaux d'attributs et ses
+// talents lui sont propres. Les Ombres (monnaie) et les statistiques sont communes.
+// attrs / talents : le personnage choisi (cls) ; characters : les autres, rangés.
 export function newProfile() {
   return {
     version: PROFILE_VERSION,
-    shadows: 0, // Ombres disponibles
-    attrs: Object.fromEntries(ATTR_IDS.map((id) => [id, 1])), // niveaux d'attributs (1 à 10)
-    cls: 'warrior', // classe choisie
-    talents: {}, // build de la classe choisie : { id: rang }
-    builds: {}, // builds des autres classes (rangés quand on change de classe)
+    shadows: 0, // Ombres disponibles (communes à tous les personnages)
+    attrs: freshAttrs(), // niveaux d'attributs du personnage choisi (1 à 10)
+    cls: 'warrior', // personnage (classe) choisi
+    talents: {}, // talents du personnage choisi : { id: rang }
+    characters: {}, // les autres personnages : { classe: { attrs, talents } }
     stats: { runs: 0, victories: 0, bestFloor: 0, totalShadows: 0, bosses: newBossCount() },
   };
+}
+
+function blankCharacter(attrs, talents) {
+  return ATTR_IDS.every((id) => (attrs[id] ?? 1) === 1) && Object.keys(talents).length === 0;
+}
+
+function freshAttrs() {
+  return Object.fromEntries(ATTR_IDS.map((id) => [id, 1]));
+}
+
+// Personnage d'une classe (le choisi ou un rangé) : { attrs, talents } (lecture seule)
+export function characterOf(profile, cls) {
+  if (cls === profile.cls) return { attrs: profile.attrs, talents: profile.talents };
+  return profile.characters[cls] || { attrs: freshAttrs(), talents: {} };
+}
+
+// Niveaux gagnés par un personnage (0 au départ, 36 tout au maximum)
+export function characterLevel(profile, cls) {
+  const { attrs } = characterOf(profile, cls);
+  return ATTR_IDS.reduce((sum, id) => sum + attrLevel({ attrs }, id) - 1, 0);
 }
 
 function newBossCount() {
@@ -48,12 +72,16 @@ export function classUnlocked(profile, cls) {
   return !boss || profile.stats.bosses[boss] > 0;
 }
 
-// Change de classe : le build de l'ancienne classe est rangé, celui de la nouvelle ressorti
+// Change de personnage : l'ancien est rangé (niveaux et talents), le nouveau ressorti
 export function selectClass(profile, cls) {
   if (!classUnlocked(profile, cls) || cls === profile.cls) return false;
-  profile.builds[profile.cls] = profile.talents;
-  profile.talents = profile.builds[cls] || {};
-  delete profile.builds[cls];
+  // Un personnage jamais monté n'est pas rangé (même forme que relu par sanitizeProfile)
+  if (blankCharacter(profile.attrs, profile.talents)) delete profile.characters[profile.cls];
+  else profile.characters[profile.cls] = { attrs: profile.attrs, talents: profile.talents };
+  const next = characterOf(profile, cls);
+  profile.attrs = next.attrs;
+  profile.talents = next.talents;
+  delete profile.characters[cls];
   profile.cls = cls;
   return true;
 }
@@ -129,10 +157,13 @@ export function recordRun(profile, state) {
   return earned;
 }
 
-// Total des Ombres investies dans les attributs
+// Total des Ombres investies dans les attributs, tous personnages confondus
 export function investedShadows(profile) {
   let total = 0;
-  for (const id of ATTR_IDS) for (let l = 1; l < attrLevel(profile, id); l++) total += ATTR_COSTS[l - 1];
+  for (const cls of CLASS_IDS) {
+    const { attrs } = characterOf(profile, cls);
+    for (const id of ATTR_IDS) for (let l = 1; l < attrLevel({ attrs }, id); l++) total += ATTR_COSTS[l - 1];
+  }
   return total;
 }
 
@@ -156,13 +187,22 @@ export function sanitizeProfile(raw) {
   if (raw.version === 1 || (raw.ranks && !raw.attrs)) {
     p.shadows += refundV1(raw.ranks);
   } else {
-    // Les talents actifs appartiennent à la classe choisie (talents de classe compris)
+    // Le personnage choisi (talents de classe compris), validé par les règles
     const meta = cleanMeta({ attrs: raw.attrs, talents: raw.talents, cls: classOf(raw.cls) });
     p.attrs = meta.attrs;
     p.talents = meta.talents;
-    // Builds rangés des autres classes, validés avec les mêmes attributs
+    // Les autres personnages. Avant la version 4, les niveaux étaient communs à toutes les
+    // classes : chacune les garde (personne ne perd rien), avec son build rangé (builds).
+    const chars = raw.characters && typeof raw.characters === 'object' ? raw.characters : {};
     const builds = raw.builds && typeof raw.builds === 'object' ? raw.builds : {};
-    for (const c of CLASS_IDS) if (builds[c]) p.builds[c] = cleanMeta({ attrs: p.attrs, talents: builds[c], cls: c }).talents;
+    for (const c of CLASS_IDS) {
+      const old = (raw.version ?? 0) < 4;
+      const src = old ? { attrs: raw.attrs, talents: builds[c] } : chars[c];
+      if (!src || typeof src !== 'object') continue;
+      const m = cleanMeta({ attrs: src.attrs, talents: src.talents, cls: c });
+      // Un personnage jamais monté n'est pas rangé (forme unique d'un profil neuf)
+      if (!blankCharacter(m.attrs, m.talents)) p.characters[c] = { attrs: m.attrs, talents: m.talents };
+    }
   }
   const st = raw.stats || {};
   p.stats = {
@@ -185,10 +225,12 @@ export function sanitizeProfile(raw) {
   const cls = classOf(raw.cls);
   if (classUnlocked(p, cls)) p.cls = cls;
   else {
-    p.builds[cls] = p.talents;
-    p.talents = p.builds.warrior || {};
+    p.characters[cls] = { attrs: p.attrs, talents: p.talents };
+    const w = characterOf(p, 'warrior');
+    p.attrs = w.attrs;
+    p.talents = w.talents;
   }
-  delete p.builds[p.cls];
+  delete p.characters[p.cls];
   return p;
 }
 

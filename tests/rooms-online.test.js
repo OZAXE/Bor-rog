@@ -247,20 +247,90 @@ test('coupure : la partie continue, le joueur revient avec son jeton ; un dépar
   assert.equal(room.state.players[1].out, true);
 });
 
-test('fin de partie : dernier instantané envoyé, salon fermé un peu plus tard', () => {
-  const w = world();
-  const { a, code, room } = duo(w);
+// Fait mourir le duo (fin de descente)
+function wipe(room) {
   room.state.players[0].hp = 0;
   room.state.players[0].down = 1;
   room.state.players[1].out = true;
+}
+
+test('fin de descente : dernier instantané, puis le duo reste ensemble dans le salon', () => {
+  const w = world();
+  const { a, b, code, room } = duo(w);
+  wipe(room);
   w.advance(100);
-  assert.equal(room.phase, 'ended');
-  assert.equal(a.last('snap').status, 'dead');
+  assert.equal(a.last('snap').status, 'dead', 'le dernier instantané montre la fin');
+  assert.equal(room.phase, 'lobby');
+  const la = a.last('lobby');
+  assert.equal(la.between, true);
+  assert.equal(la.code, code, 'même salon, même code');
+  assert.deepEqual(la.players.map((p) => p.ready), [false, false]);
+  assert.equal(b.last('lobby').between, true);
   const n = a.all('snap').length;
   w.advance(500);
-  assert.equal(a.all('snap').length, n, 'plus rien après la fin');
-  w.advance(61e3);
+  assert.equal(a.all('snap').length, n, 'plus d’instantané entre deux descentes');
+});
+
+test('entre deux descentes : chacun se déclare prêt avec son profil à jour, la suivante part à deux', () => {
+  const w = world();
+  const { a, b, room } = duo(w);
+  wipe(room);
+  w.advance(100);
+  const firstSeed = a.last('start').fixed.seed;
+  w.rooms.message(a, { t: 'ready', name: 'Orphée', cls: 'mystic', meta: { attrs: { demeter: 10 }, talents: {} } });
+  assert.equal(room.phase, 'lobby', 'on attend l’allié');
+  assert.deepEqual(b.last('lobby').players.map((p) => p.ready), [true, false]);
+  w.rooms.message(b, { t: 'ready', name: 'Eurydice', cls: 'warrior', meta: {} });
+  assert.equal(room.phase, 'playing');
+  const s2 = a.last('start');
+  assert.equal(s2.run, 2, 'deuxième descente');
+  assert.notEqual(s2.fixed.seed, firstSeed, 'nouveau donjon');
+  assert.deepEqual(s2.snap.players.map((p) => p.cls), ['mystic', 'warrior'], 'classes mises à jour');
+  assert.ok(room.state.players[0].maxHp > room.state.players[1].maxHp, 'niveaux mis à jour');
+  w.advance(200);
+  assert.ok(a.all('snap').length > 0);
+  // « ready » n'a aucun effet pendant une partie
+  w.rooms.message(a, { t: 'ready', cls: 'huntress' });
+  assert.equal(room.state.players[0].cls, 'mystic');
+});
+
+test('entre deux descentes : celui qui part libère le salon pour l’autre, qui en devient le créateur', () => {
+  const w = world();
+  const { a, b, code, room } = duo(w);
+  wipe(room);
+  w.advance(100);
+  w.rooms.message(a, { t: 'leave' });
+  const lb = b.last('lobby');
+  assert.equal(lb.players.length, 1);
+  assert.equal(lb.you, 0);
+  assert.equal(lb.host, true);
+  assert.ok(w.rooms.rooms.has(code), 'le salon reste ouvert');
+  // Seul, être prêt ne lance rien
+  w.rooms.message(b, { t: 'ready', cls: 'warrior' });
+  assert.equal(room.phase, 'lobby');
+});
+
+test('fin de descente : un joueur déconnecté ou parti n’est pas gardé dans le salon', () => {
+  const w = world();
+  const { a, b, room } = duo(w);
+  w.rooms.disconnect(b);
+  wipe(room);
+  w.advance(100);
+  assert.equal(room.seats.length, 1);
+  assert.equal(a.last('lobby').players.length, 1);
+  assert.equal(a.last('lobby').you, 0);
+});
+
+test('entre deux descentes : salon fermé après 30 min sans repartir', () => {
+  const w = world();
+  const { a, code, room } = duo(w);
+  wipe(room);
+  w.advance(100);
+  w.freeze(29 * 60e3);
+  assert.ok(w.rooms.rooms.has(code));
+  w.freeze(2 * 60e3);
   assert.equal(w.rooms.rooms.has(code), false);
+  assert.match(a.last('error').message, /inactif/);
 });
 
 test('salon : le créateur part, le salon ferme ; l’invité part, la place se libère ; partie vide fermée', () => {

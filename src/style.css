@@ -1625,3 +1625,17 @@ body {
     display: none; /* téléphone en paysage : le nom et l'arme suffisent */
   }
 }
+
+/* Seuil : duo en ligne entre deux descentes */
+#threshold .duo-info {
+  margin: 4px 0 0;
+  color: var(--spectral);
+}
+
+#threshold .duo-info[hidden] {
+  display: none;
+}
+
+#threshold .buttons button[hidden] {
+  display: none;
+}

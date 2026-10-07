@@ -14,7 +14,7 @@ const MAX_QUEUE = 12; // intentions en attente au plus (au-delà, les plus ancie
 const MAX_CATCHUP = 5; // pas rattrapés au plus par tour de boucle (serveur ralenti)
 const LOBBY_TTL = 10 * 60e3; // salon jamais lancé : fermé au bout de 10 min
 const EMPTY_TTL = 2 * 60e3; // partie sans aucun joueur connecté : fermée au bout de 2 min
-const ENDED_TTL = 60e3; // partie finie : fermée au bout d'1 min
+const BETWEEN_TTL = 30 * 60e3; // entre deux descentes (au Seuil) : salon gardé 30 min
 
 // now() : horloge en millisecondes ; random() : nombre dans [0, 1[ (codes, graines, jetons)
 export function createRooms({ now = () => Date.now(), random = Math.random } = {}) {
@@ -44,6 +44,7 @@ export function createRooms({ now = () => Date.now(), random = Math.random } = {
       ack: 0, // numéro de la dernière intention jouée
       action: null, // choix chez Charon en attente
       left: false,
+      ready: false, // entre deux descentes : prêt à repartir
     };
   }
 
@@ -55,7 +56,9 @@ export function createRooms({ now = () => Date.now(), random = Math.random } = {
       you: slot,
       host: slot === 0,
       token: seat.token,
-      players: room.seats.map((s) => ({ name: s.name, cls: s.cls })),
+      players: room.seats.map((s) => ({ name: s.name, cls: s.cls, ready: s.ready })),
+      between: !!room.between, // le duo est entre deux descentes (chacun au Seuil)
+      run: room.run || 0, // nombre de descentes déjà lancées dans ce salon
     };
   }
 
@@ -74,7 +77,15 @@ export function createRooms({ now = () => Date.now(), random = Math.random } = {
     const { room, slot } = at;
     const seat = room.seats[slot];
     if (room.phase === 'lobby') {
-      // Le créateur part : le salon ferme ; l'invité part : la place se libère
+      // Entre deux descentes : celui qui reste garde le salon (il en devient le créateur)
+      if (room.between) {
+        room.seats.splice(slot, 1);
+        if (!room.seats.length) return closeRoom(room);
+        reseat(room);
+        broadcastLobby(room);
+        return;
+      }
+      // Avant la première descente : le créateur part, le salon ferme ; l'invité part, la place se libère
       if (slot === 0) closeRoom(room, 'Le créateur du salon est parti.');
       else {
         room.seats.splice(1, 1);
@@ -95,6 +106,42 @@ export function createRooms({ now = () => Date.now(), random = Math.random } = {
     for (const s of room.seats) if (s.conn) s.conn.send({ t: 'left', name: seat.name });
   }
 
+  // Places renumérotées (après un départ) : chaque connexion connaît sa nouvelle place
+  function reseat(room) {
+    room.seats.forEach((st, i) => st.conn && where.set(st.conn, { room, slot: i }));
+  }
+
+  // Lance une descente avec les profils actuels des joueurs (classe, niveaux, talents)
+  function startGame(room) {
+    const seed = Math.floor(random() * 1e9).toString(36);
+    room.state = createGameState(seed, { players: room.seats.map((st) => ({ meta: st.meta, cls: st.cls })) });
+    room.phase = 'playing';
+    room.between = false;
+    room.run = (room.run || 0) + 1;
+    room.steps = 0;
+    room.floor = room.state.floorIndex;
+    room.events = [];
+    room.last = now();
+    room.acc = 0;
+    for (const st of room.seats) Object.assign(st, { ready: false, queue: [], last: {}, ack: 0, action: null, left: false });
+    room.seats.forEach((st, i) => st.conn && st.conn.send(startMessage(room, i)));
+  }
+
+  // Fin d'une descente : le duo reste ensemble. Chacun passe au Seuil, puis se déclare
+  // prêt ; la descente suivante part quand les deux le sont. Les absents sont retirés.
+  function backToLobby(room) {
+    room.phase = 'lobby';
+    room.between = true;
+    room.since = now();
+    room.state = null;
+    for (const st of room.seats) if (!st.conn || st.left) st.conn && where.delete(st.conn);
+    room.seats = room.seats.filter((st) => st.conn && !st.left);
+    if (!room.seats.length) return closeRoom(room);
+    for (const st of room.seats) st.ready = false;
+    reseat(room);
+    broadcastLobby(room);
+  }
+
   function closeRoom(room, message) {
     for (const s of room.seats) {
       if (!s.conn) continue;
@@ -104,8 +151,9 @@ export function createRooms({ now = () => Date.now(), random = Math.random } = {
     rooms.delete(room.code);
   }
 
+  // run : numéro de la descente (le navigateur distingue une nouvelle descente d'un retour après coupure)
   function startMessage(room, slot) {
-    return { t: 'start', you: slot, fixed: fixedOf(room.state), snap: snapshot(room, slot) };
+    return { t: 'start', you: slot, run: room.run, fixed: fixedOf(room.state), snap: snapshot(room, slot) };
   }
 
   function snapshot(room, slot) {
@@ -141,15 +189,19 @@ export function createRooms({ now = () => Date.now(), random = Math.random } = {
         if (!at || at.slot !== 0 || at.room.phase !== 'lobby') return;
         const room = at.room;
         if (room.seats.length < 2) return error(conn, 'Il faut être deux pour lancer la descente.');
-        const seed = Math.floor(random() * 1e9).toString(36);
-        room.state = createGameState(seed, { players: room.seats.map((s) => ({ meta: s.meta, cls: s.cls })) });
-        room.phase = 'playing';
-        room.steps = 0;
-        room.floor = room.state.floorIndex;
-        room.events = [];
-        room.last = now();
-        room.acc = 0;
-        room.seats.forEach((s, i) => s.conn && s.conn.send(startMessage(room, i)));
+        startGame(room);
+        return;
+      }
+      case 'ready': {
+        // Entre deux descentes : profil mis à jour (Ombres dépensées, autre personnage)
+        // et prêt à repartir ; la descente part quand les deux sont prêts
+        const at = where.get(conn);
+        if (!at || at.room.phase !== 'lobby' || !at.room.between) return;
+        const room = at.room;
+        const fresh = seatOf(conn, msg);
+        Object.assign(room.seats[at.slot], { name: fresh.name, cls: fresh.cls, meta: fresh.meta, ready: msg.ready !== false });
+        if (room.seats.length === SIM.coop.maxPlayers && room.seats.every((st) => st.ready)) startGame(room);
+        else broadcastLobby(room);
         return;
       }
       case 'rejoin': {
@@ -241,7 +293,7 @@ export function createRooms({ now = () => Date.now(), random = Math.random } = {
       const t = now();
       for (const room of [...rooms.values()]) {
         if (room.phase === 'lobby') {
-          if (t - room.since > LOBBY_TTL) closeRoom(room, 'Salon fermé (inactif).');
+          if (t - room.since > (room.between ? BETWEEN_TTL : LOBBY_TTL)) closeRoom(room, 'Salon fermé (inactif).');
           continue;
         }
         if (!room.seats.some((s) => s.conn)) {
@@ -250,10 +302,6 @@ export function createRooms({ now = () => Date.now(), random = Math.random } = {
           continue;
         }
         room.emptySince = undefined;
-        if (room.phase === 'ended') {
-          if (t - room.endedAt > ENDED_TTL) closeRoom(room);
-          continue;
-        }
         room.acc = Math.min(room.acc + (t - room.last) / 1000, MAX_CATCHUP * STEP);
         room.last = t;
         while (room.acc >= STEP) {
@@ -263,8 +311,7 @@ export function createRooms({ now = () => Date.now(), random = Math.random } = {
           if (++room.steps % SNAPSHOT_EVERY === 0) sendState(room);
           if (room.state.status === 'dead' || room.state.status === 'victory') {
             sendState(room);
-            room.phase = 'ended';
-            room.endedAt = t;
+            backToLobby(room);
             break;
           }
         }

@@ -8,7 +8,7 @@ import { SIM, ticks } from '../src/systems/simConfig.js';
 import { TILE } from '../src/dungeon/tiles.js';
 import { playerStats } from '../src/systems/boons.js';
 import { CLASSES, CLASS_IDS, classOf } from '../src/systems/classes.js';
-import { newProfile, recordRun, selectClass, classUnlocked, sanitizeProfile, learn, buyLevel } from '../src/meta/profile.js';
+import { newProfile, recordRun, selectClass, classUnlocked, sanitizeProfile, learn, buyLevel, characterOf, characterLevel, investedShadows } from '../src/meta/profile.js';
 import { encodeProfile, decodeProfile } from '../src/meta/transfer.js';
 import { scriptedIntents, stateHash } from './helpers.js';
 
@@ -187,21 +187,49 @@ test('les trois classes sont jouables dès le départ', () => {
   for (const id of CLASS_IDS) assert.equal(typeof CLASSES[id].text, 'string');
 });
 
-test('un build par classe : changer de classe range le build et le retrouve au retour', () => {
+test('un personnage par classe : niveaux et talents propres, Ombres communes', () => {
   const p = newProfile();
   p.shadows = 1000;
-  p.stats.bosses.cerberus = 1;
   buyLevel(p, 'ares');
   buyLevel(p, 'demeter');
   assert.ok(learn(p, 'swift'));
+  const left = p.shadows;
+  assert.equal(characterLevel(p, 'warrior'), 2);
   assert.ok(selectClass(p, 'huntress'));
+  // La Chasseresse repart du niveau 1, sans talent ; les Ombres restent les mêmes
+  assert.equal(p.attrs.ares, 1);
   assert.deepEqual(p.talents, {});
-  assert.ok(learn(p, 'vigor'));
+  assert.equal(p.shadows, left);
+  assert.equal(characterLevel(p, 'huntress'), 0);
+  assert.equal(characterLevel(p, 'warrior'), 2, 'le Guerrier rangé garde ses niveaux');
+  buyLevel(p, 'hermes');
+  assert.ok(learn(p, 'vigor') || learn(p, 'fleet'));
+  const huntress = JSON.stringify([p.attrs, p.talents]);
   assert.ok(selectClass(p, 'warrior'));
+  assert.equal(p.attrs.ares, 2);
+  assert.equal(p.attrs.hermes, 1);
   assert.deepEqual(p.talents, { swift: 1 });
   assert.ok(selectClass(p, 'huntress'));
-  assert.deepEqual(p.talents, { vigor: 1 });
-  assert.equal(p.attrs.ares, 2, 'les attributs sont communs');
+  assert.equal(JSON.stringify([p.attrs, p.talents]), huntress, 'retrouvée telle quelle');
+  // Ombres investies : tous personnages confondus
+  assert.equal(investedShadows(p), 40 + 40 + 40);
+  // Un personnage jamais monté n'est pas rangé : le profil garde la forme d'une relecture
+  assert.ok(selectClass(p, 'mystic'));
+  assert.ok(selectClass(p, 'warrior'));
+  assert.equal(p.characters.mystic, undefined);
+  assert.deepEqual(sanitizeProfile(JSON.parse(JSON.stringify(p))), p);
+});
+
+test('ancien profil (niveaux communs) : chaque personnage garde les niveaux, rien n’est perdu', () => {
+  const old = { version: 3, shadows: 7, cls: 'huntress', attrs: { ares: 4, demeter: 2 }, talents: {}, builds: { warrior: { swift: 1 } }, stats: { bosses: {} } };
+  const p = sanitizeProfile(old);
+  assert.equal(p.version, 4);
+  assert.equal(p.cls, 'huntress');
+  for (const c of CLASS_IDS) assert.equal(characterOf(p, c).attrs.ares, 4, c);
+  assert.deepEqual(characterOf(p, 'warrior').talents, { swift: 1 });
+  assert.equal(characterLevel(p, 'mystic'), 4);
+  // Un profil v4 relu à l'identique
+  assert.deepEqual(sanitizeProfile(JSON.parse(JSON.stringify(p))), p);
 });
 
 test('profil d\'avant les classes : boss réputés vaincus selon le meilleur étage ; classe gardée', () => {

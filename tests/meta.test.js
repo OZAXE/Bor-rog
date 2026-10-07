@@ -596,7 +596,7 @@ test("code d'export : aller-retour exact, espaces et retours à la ligne tolér�
   p.talents = cleanMeta({ attrs: p.attrs, talents: { swift: 1, blade: 1, vigor: 2, roots: 1, purse: 3, tithe: 2 } }).talents;
   p.stats = { runs: 17, victories: 2, bestFloor: 9, totalShadows: 4321, bosses: { cerberus: 3, hydra: 2, thanatos: 2 } };
   p.cls = 'huntress';
-  p.builds = { warrior: { vigor: 1 } };
+  p.characters = { warrior: { attrs: { ares: 2, demeter: 3, hermes: 1, charon: 1 }, talents: { vigor: 1 } } };
   const code = encodeProfile(p);
   assert.match(code, /^BORROG1-[A-Za-z0-9._]+-[a-z0-9]+$/);
   assert.deepEqual(decodeProfile(code).profile, p);

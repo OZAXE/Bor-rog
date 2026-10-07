@@ -6,7 +6,8 @@
 // (`dirty`). Le serveur refuse une écriture basée sur une version dépassée : c'est ce qui
 // empêche un appareil d'écraser en silence la progression faite sur un autre.
 
-import { investedShadows } from './profile.js';
+import { investedShadows, characterLevel } from './profile.js';
+import { CLASS_IDS } from '../systems/classes.js';
 
 // Profil « vierge » : jamais joué, rien acheté (rien à perdre en prenant celui du compte)
 export function isBlankProfile(p) {
@@ -37,7 +38,8 @@ export function refreshAction(sync, remoteRev, remote) {
 
 // Résumé lisible d'un profil (écran de choix en cas de conflit)
 export function profileSummary(p) {
-  const levels = Object.values(p.attrs).reduce((s, l) => s + l - 1, 0);
+  // Niveaux gagnés, tous personnages confondus
+  const levels = CLASS_IDS.reduce((s, c) => s + characterLevel(p, c), 0);
   return {
     shadows: p.shadows + investedShadows(p), // Ombres au total (dépensées comprises)
     levels,
