@@ -1,4 +1,5 @@
-// Classes du héros : identité (nom, description) et conditions de déblocage.
+// Classes du héros : identité (nom, description). Toutes sont jouables dès le départ :
+// on les fait progresser au fil des parties (unlockBoss : null = aucune condition).
 // Les chiffres de jeu sont dans SIM.classes (src/systems/simConfig.js).
 
 import { SIM } from './simConfig.js';
@@ -14,13 +15,13 @@ export const CLASSES = {
     name: 'Chasseresse',
     weaponName: 'Arc',
     text: 'Tire de loin, rapide mais fragile.',
-    unlockBoss: 'cerberus',
+    unlockBoss: null,
   },
   mystic: {
     name: 'Mystique',
     weaponName: 'Bâton des âmes',
     text: 'Orbes lents qui explosent sur une zone.',
-    unlockBoss: 'hydra',
+    unlockBoss: null,
   },
 };
 export const CLASS_IDS = Object.keys(CLASSES);

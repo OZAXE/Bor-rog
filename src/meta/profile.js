@@ -40,7 +40,8 @@ function newBossCount() {
 
 // ---------- Classes ----------
 
-// Une classe se débloque en battant (au moins une fois) le boss indiqué
+// Une classe est disponible si elle n'a pas de boss à vaincre (aujourd'hui : toutes),
+// ou si ce boss a été vaincu au moins une fois
 export function classUnlocked(profile, cls) {
   const boss = CLASSES[cls] && CLASSES[cls].unlockBoss;
   if (CLASSES[cls] === undefined) return false;

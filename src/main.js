@@ -24,11 +24,11 @@ import { SIM } from './systems/simConfig.js';
 import { ZONE_THEMES } from './render/zoneThemes.js';
 import { zoneOf, FLOORS_PER_ZONE } from './dungeon/zones.js';
 import { createInput } from './controls/input.js';
-import { recordRun, metaOf, shadowsEarned } from './meta/profile.js';
+import { recordRun, metaOf, shadowsEarned, selectClass } from './meta/profile.js';
 import { loadProfile, saveProfile, saveRun, loadRunText, clearRun } from './ui/storage.js';
 import { createAccount } from './ui/account.js';
 import { serializeRun, parseRun, runSummary } from './state/savegame.js';
-import { CLASSES } from './systems/classes.js';
+import { CLASSES, CLASS_IDS } from './systems/classes.js';
 import { createThreshold } from './ui/threshold.js';
 import { createLobby } from './ui/lobby.js';
 import { createNetGame } from './net/netGame.js';
@@ -490,6 +490,29 @@ function openLobby() {
   lobby.open();
 }
 $('btn-online').addEventListener('click', openLobby);
+
+// ---- Choix de la classe sur l'écran titre ----
+// Toutes les classes sont jouables dès le départ ; chacune garde son build de talents.
+// Avant la première descente, changer de classe recrée le héros de la partie qui attend.
+const startClasses = $('start-classes');
+const startCards = new Map();
+for (const id of CLASS_IDS) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = `class-card class-${id}`;
+  b.innerHTML = `<b>${CLASSES[id].name}</b><span>${CLASSES[id].weaponName}</span><small>${CLASSES[id].text}</small>`;
+  b.addEventListener('click', () => {
+    if (selectClass(profile.current, id)) storeProfile();
+    if (!started && !net) adoptState(newState(seed));
+    renderStartClasses();
+  });
+  startClasses.appendChild(b);
+  startCards.set(id, b);
+}
+function renderStartClasses() {
+  for (const [id, b] of startCards) b.classList.toggle('on', id === profile.current.cls);
+}
+renderStartClasses();
 // Lien d'invitation (?join=CODE, QR code scanné) : on rejoint le salon tout de suite.
 // Le paramètre est retiré de l'adresse pour qu'un rechargement ne rejoigne pas à nouveau.
 const invitedTo = codeFromLink(window.location.search);
@@ -696,6 +719,7 @@ function handleEvents(events) {
       showBanner('Salle purifiée', 'calm');
     }
     if (ev.type === 'defiance') showBanner('Défi de la Mort', 'calm');
+    if (ev.type === 'stairsBlocked' && ev.player === myIndex) showBanner('Purifie la salle pour descendre', 'danger');
     if (ev.type === 'playerDown') showBanner(ev.player === myIndex ? 'À terre ! Ton allié peut te relever' : 'Ton allié est à terre : va le relever', 'danger');
     if (ev.type === 'playerRevived') showBanner(ev.player === myIndex ? 'Relevé !' : 'Allié relevé', 'calm');
     if (ev.type === 'playerOut') showBanner(ev.player === myIndex ? 'Tu reviendras à l’étage suivant' : 'Ton allié reviendra à l’étage suivant', 'danger');
